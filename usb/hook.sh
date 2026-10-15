@@ -33,6 +33,10 @@ if [ -f $G/kmod/btusb.ko ]; then
   echo -n /postinstall/gbos/firmware > $FWP
 fi
 
+# drm.debug=0x04 (KMS only; not ATOMIC, which logs every frame): i915 dumps gamma/CSC mode and range per modeset while
+# drm_hwcomposer first sets up the panel. gbos.rc turns it off at boot_completed. Washed-out colours.
+echo 0x04 > /sys/module/drm/parameters/debug 2>/dev/null && log "hook: drm.debug=0x04 (KMS) until boot_completed"
+
 # Fake ChromeOS boot disk for the boot HAL: misc + vbmeta_a/vbmeta_b with cgpt slot attributes.
 if [ -f $G/bootdisk.img ]; then
   losetup -P /dev/loop6 $G/bootdisk.img; sleep 1; mdev -s
@@ -85,6 +89,8 @@ service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; ( head -n 3
     seclabel u:r:shell:s0
     oneshot
 on property:sys.boot_completed=1
+    # KMS debug was on during the HWC's first modesets (set early in hook.sh); turn it off again.
+    write /sys/module/drm/parameters/debug 0
     start gbos_audiodiag
     start gbos_wmsize
     start gbos_displaydiag
