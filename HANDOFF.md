@@ -81,3 +81,9 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   stage0 boots GBOSSYS when no stick (or stick lacks MODE=install/BOOT_FROM=stick) and mounts ext4 data.
   QEMU: cancel path tested (wrong serial -> nothing written). Full install and NVMe boot NOT tested (user
   chose to go straight to hardware; burner laptop). Stick has #20 + MODE=install.
+- 2026-10-15: installed to the Latitude 5300's NVMe and boots from it. User reports everything works except
+  sound (touchpad gestures, battery, Wi-Fi OK). Sound not investigated (user deprioritised): no logs taken.
+  Next step if revisited: boot the stick with MODE=boot + BOOT_FROM=stick and dump /proc/asound, the codec
+  info, tinymix and dras logcat. Suspects: dras card-name match ("HDA Intel PCH"), mixer control names,
+  or the DSP still claiming the controller.
+- The stick still has MODE=install; booting with it plugged in starts the installer (it asks for the serial).
