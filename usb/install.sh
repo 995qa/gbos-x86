@@ -63,6 +63,8 @@ if [ "${ACTION:-install}" = update ]; then
   for f in $FILES; do cmp -s $G/$f /mnt/nsys/gbos/$f || { say "  $f"; cp $G/$f /mnt/nsys/gbos/$f || die "copy $f failed"; }; done
   for d in $DIRS; do rm -rf /mnt/nsys/gbos/$d; cp -r $G/$d /mnt/nsys/gbos/ || die "copy $d/ failed"; done
   cmp -s $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI || { say "  kernel"; cp $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI || die "copy kernel failed"; }
+  # Settings such as DENSITY follow the stick; the installed copy always boots normally.
+  grep -v -e '^MODE=' -e '^ACTION=' $G/gbos.cfg > /mnt/nsys/gbos/gbos.cfg && echo 'MODE=boot' >> /mnt/nsys/gbos/gbos.cfg
   sync; echo 3 > /proc/sys/vm/drop_caches
   say "Verifying ..."
   check $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI
@@ -152,7 +154,7 @@ for f in $FILES; do cp $G/$f /mnt/nsys/gbos/$f || die "copy $f failed"; done
 for d in $DIRS; do cp -r $G/$d /mnt/nsys/gbos/ || die "copy $d/ failed"; done
 cp /gbos/busybox /mnt/nsys/busybox 2>/dev/null
 # The installed system boots normally and can't re-run the installer.
-grep -v '^MODE=' $G/gbos.cfg > /mnt/nsys/gbos/gbos.cfg; echo 'MODE=boot' >> /mnt/nsys/gbos/gbos.cfg
+grep -v -e '^MODE=' -e '^ACTION=' $G/gbos.cfg > /mnt/nsys/gbos/gbos.cfg; echo 'MODE=boot' >> /mnt/nsys/gbos/gbos.cfg
 sync; echo 3 > /proc/sys/vm/drop_caches
 
 say "Verifying ..."

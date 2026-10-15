@@ -154,9 +154,12 @@ else
   log "hook: bind /gbos -> /postinstall FAILED"
 fi
 
-# Hide protected_vm.supported=1 (no pKVM here) from vendor/build.prop
-grep -v '^ro.boot.hypervisor.protected_vm.supported=' /new/vendor/build.prop > /tmp/vendor.build.prop \
-  && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop && log "hook: vendor build.prop: protected_vm.supported hidden"
+# Hide protected_vm.supported=1 (no pKVM here) from vendor/build.prop, and replace the display density:
+# Google's 260 is for the Googlebook's panel; the Latitude 5300's 13.3" 1080p is ~166 dpi, so 260 makes
+# everything too big even at the smallest Display size. DENSITY in gbos.cfg (default 180; lower = smaller).
+case "$DENSITY" in ''|*[!0-9]*) DENSITY=180;; esac
+{ grep -v -e '^ro.boot.hypervisor.protected_vm.supported=' -e '^ro.sf.lcd_density=' /new/vendor/build.prop; echo "ro.sf.lcd_density=$DENSITY"; } > /tmp/vendor.build.prop \
+  && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop && log "hook: vendor build.prop: protected_vm.supported hidden, lcd_density=$DENSITY"
 # Only one Trusty VM may own CID 200: drop the plain launcher's auto-start so the on-demand
 # (accessor-registering) launcher runs it, falling back to non-protected by itself.
 R=/new/system_ext/etc/init/desktop-trusty_security_vm_launcher.rc
