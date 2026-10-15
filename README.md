@@ -86,6 +86,7 @@ changing anything.
 |---|---|
 | `usb/stage0_init.sh` | stage0: volume detection, logging, partition mounts, switch_root |
 | `usb/hook.sh` | Android workarounds, run by stage0 before switch_root; writes `gbos.rc` (init services) |
+| `usb/early_patch.sh` | Sourced from `gbos.cfg`; binds the patched libz/libcrypto before stage0's first `dmctl` |
 | `usb/install.sh` | NVMe installer and updater (`MODE=install`) |
 | `usb/apex_patch.sh` | binds the patched libcrypto over the APEX copies (run from init.rc) |
 | `usb/gbos.cfg` | user settings: `MODE` (ask/live/install/boot), `DENSITY`, `RESOLUTION`, `LOAD_I915`, ... |

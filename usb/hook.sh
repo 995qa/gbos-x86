@@ -285,7 +285,9 @@ fi
 # bind-mounted over the exact original it was made from.
 for p in system:/new/system/lib64/libz.so:371f70d6a9392327cb36838d0cbc7af7388d1689c25d91cd343af8e58433683b vendor:/new/vendor/lib64/libz.so:e45aecb65cbb40f0c3070b05aa9d974076d401ed6f2aff3081af26a14e812590; do
   n=${p%%:*}; r=${p#*:}; t=${r%%:*}; h=${r#*:}
-  if [ -f $G/patched/$n.libz.so ] && [ "$(sha256sum $t | cut -d' ' -f1)" = "$h" ]; then
+  if grep -q " $t " /proc/mounts; then
+    log "hook: $n libz already patched (early_patch.sh)"
+  elif [ -f $G/patched/$n.libz.so ] && [ "$(sha256sum $t | cut -d' ' -f1)" = "$h" ]; then
     mount --bind $G/patched/$n.libz.so $t && log "hook: patched $n libz (scalar adler32) active"
   else
     log "hook: $n libz NOT patched (missing patch or unexpected original)"
@@ -296,7 +298,9 @@ done
 # scalar siblings. Hash-gated like libz.
 for p in system:/new/system/lib64/libcrypto.so:0ee96c7e0cb1ffca5520d2eaca02b4fa2ccff5a8fcb753a491e85555a91c9f2a vendor:/new/vendor/lib64/libcrypto.so:70cc371baf9925d5f1f857d03177d5193caf60bb13bb2012b4336657adcf48e7; do
   n=${p%%:*}; r=${p#*:}; t=${r%%:*}; h=${r#*:}
-  if [ -f $G/patched/$n.libcrypto.so ] && [ "$(sha256sum $t | cut -d' ' -f1)" = "$h" ]; then
+  if grep -q " $t " /proc/mounts; then
+    log "hook: $n libcrypto already patched (early_patch.sh)"
+  elif [ -f $G/patched/$n.libcrypto.so ] && [ "$(sha256sum $t | cut -d' ' -f1)" = "$h" ]; then
     mount --bind $G/patched/$n.libcrypto.so $t && log "hook: patched $n libcrypto (scalar SHA) active"
   else
     log "hook: $n libcrypto NOT patched (missing patch or unexpected original)"

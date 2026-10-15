@@ -138,3 +138,7 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   install|boot (old BOOT_FROM=stick = live). Menu timeout path tested in QEMU. tools/make_gbos86_image.sh builds
   dist/gbOS86-YYYYMMDD.img (GPT: 256M EFI + 6G GBOS FAT32, super.img rebuilt from lapis/parts). First image
   gbOS86-20261016.img built; not boot-tested (user declined).
+- 2026-10-16: usb/early_patch.sh (sourced from gbos.cfg) wraps `chroot` so the patched libz/libcrypto are bound before
+  stage0's first `dmctl` (avoids ~3.7M SHA-NI traps at boot); hook.sh skips re-binding ("already patched"). install.sh
+  FILES and make_gbos86_image.sh now ship it, so Update copies it to the NVMe. Stick deployed with kernel #30.
+  Not yet verified on hardware: look for "early: patched system libcrypto" before "running gbos/hook.sh" in stage0-dmesg.txt.
