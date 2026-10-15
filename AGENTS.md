@@ -34,12 +34,14 @@ Read `README.md` (what/how) and `HANDOFF.md` (chronological log of every bug and
   config section that is missing any field the sof-soundwire config has.
 - **Hash-pinned patches:** `hook.sh`/`apex_patch.sh` only bind a patched library when the original's
   sha256 matches. A new Google build disables them silently; look for `NOT patched` in `stage0-dmesg.txt`.
+- **drm_hwcomposer is written for Google's xe driver.** On i915 it silently falls back (e.g. `LOG_GAMMA_LUT` → `GAMMA_LUT`,
+  logged every frame by `drmhwc`). Check `drmhwc` lines in logcat before blaming the panel or the colour pipeline.
 - **Trusty-backed services** (Weaver, Gatekeeper, Secretkeeper, KeyMint, GSC) never answer here. A hang
   that waits on one ("Waited one second for ...") means hide or replace it in `hook.sh`.
 
 ## Where things run
 - Kernel builds: docker volume `gbos-ksrc` (`/build/src`, `/build/out`), image `gbos-kbuild`,
-  `kernel/isa_emu_patch/build.sh`. Modules for kernel #27 must come from the same tree.
+  `kernel/isa_emu_patch/build.sh`. Modules for kernel #29 must come from the same tree.
 - Emulator test: `kernel/isa_emu_test/run_qemu.py <bzImage>` must print `ISA_EMU_TEST_PASS`.
 - Shell syntax checks: `sh -n usb/hook.sh usb/install.sh usb/stage0_init.sh usb/apex_patch.sh`.
 

@@ -122,3 +122,10 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
 - Test boot (stick, boot-42) on #25: user confirms colors are good. Stick switched back to MODE=install for the NVMe update.
 - Correction: after updating the NVMe to #25, colours in the fully booted desktop look no different (good-looking was the setup screens only). Paleness unresolved but deprioritised by the user. #25 + sRGB-only props kept (harmless). Next idea if revisited: Material You theme/wallpaper (muted palette) vs panel; compare a display.txt from a full boot on #25.
 - User: video/UI still has a 'white veil' (lifted blacks) and says the panel looks right under Windows/Linux/BSD. Kernel #27 (i915_edp_full_range.sh): eDP always full-range RGB. hook: drm.debug=0x04 until boot_completed, so kmsg.log has i915's per-modeset gamma/CSC/range dump. #25 kept as usb/out/BOOTX64.EFI.prev-25. On the stick (MODE=install -> pick 1).
+- Timeline correction: the "still veil" verdict was on NVMe boot-12 = kernel #25; #27 was only installed at stick
+  boot-45 and never tested. boot-12 diag: eDP colorspace Default, SF wide colour 0, SRGB, identity CTM, so the
+  colour-space fixes worked and weren't the cause.
+- REAL CAUSE (likely): logcat "drmhwc: Missing optional LOG_GAMMA_LUT property, falling back to GAMMA_LUT" x32523,
+  i.e. the HWC writes its xe log-gamma curve into i915's linear GAMMA_LUT every commit, lifting the shadows.
+  Kernel #29 (i915_ignore_gamma.sh): hw degamma/gamma/CTM always NULL (linear). Includes #25/#27 changes.
+  On the stick (MODE=install -> 1). #27 kept as usb/out/BOOTX64.EFI.prev-27. Cost: Night Light won't work.

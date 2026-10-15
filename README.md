@@ -68,6 +68,7 @@ UEFI firmware
 | Linux Terminal never starts its VM | Trusty Secretkeeper never answers | hide Secretkeeper's VINTF declaration |
 | Logs truncated, stick corrupted | vold `fsck_msdos`'d the stick while mounted | remove vold's `voldmanaged=usb` fstab rule |
 | No sound | Google uses SOF; our kernel has legacy HDA | `usb/audio/` config for the `dras` audio HAL (card id `PCH`) |
+| White veil, lifted blacks (even video) | drm_hwcomposer loads its xe `LOG_GAMMA_LUT` curve into i915's linear `GAMMA_LUT` every frame | `kernel/isa_emu_patch/i915_ignore_gamma.sh` (kernel #29) |
 | Everything too big | `ro.sf.lcd_density=260` for Google's panel | `RESOLUTION` in `gbos.cfg` (default 2400x1350, stock density); `DENSITY` optional |
 
 Laptop-specific drivers that Google's vendor modules can't provide (they're built for Google's kernel):
@@ -87,9 +88,9 @@ changing anything.
 | `usb/apex_patch.sh` | binds the patched libcrypto over the APEX copies (run from init.rc) |
 | `usb/gbos.cfg` | user settings: `MODE`, `DENSITY`, `LOAD_I915`, `SHELL_AT`, ... |
 | `usb/audio/` | audio HAL config for the HDA card |
-| `usb/out/BOOTX64.EFI` | **current kernel** (build #27), boots directly from UEFI |
+| `usb/out/BOOTX64.EFI` | **current kernel** (build #29), boots directly from UEFI |
 | `usb/patched/`, `usb/libkm_compat.so` | patched Google libraries (private) |
-| `usb/kmod/` | `btusb`, `btintel`, `btrtl` built for kernel #27 |
+| `usb/kmod/` | `btusb`, `btintel`, `btrtl` built for kernel #29 |
 | `usb/installer/` | Alpine `sfdisk`/`mke2fs`/`e2fsck`/`mkfs.fat`/`blkid` + musl (`tools/fetch_installer_tools.sh`) |
 | `usb/firmware/` | Intel Wi-Fi + Bluetooth firmware, `regulatory.db` |
 | `usb/soft_gk`, `gatekeeper/` | software Gatekeeper binary and source |
@@ -157,7 +158,8 @@ Needs macOS or Linux with docker, python3, qemu (for tests) and ~30 GB free. The
    scripts `kernel/isa_emu_patch/i915_color_pipeline.sh` (dummy plane COLOR_PIPELINE for the HWC) and
    `i915_edp_colorspace.sh` (eDP always gets default colorimetry; BT.2020 made the panel pale) and
    `i915_edp_no_colorspace.sh` (no Colorspace property on eDP at all, from kernel #25) and
-   `i915_edp_full_range.sh` (eDP always full-range RGB, from kernel #27).
+   `i915_edp_full_range.sh` (eDP always full-range RGB, from kernel #27) and `i915_ignore_gamma.sh`
+   (ignore userspace gamma/degamma/CTM: the HWC loads an xe LOG_GAMMA_LUT curve into GAMMA_LUT, kernel #29).
 6. **Build:** `kernel/isa_emu_patch/build.sh` (in `gbos-kbuild`), then `make modules_install` into
    `usb/modroot`, then `usb/make_initramfs.py usb/modroot usb/stage0.cpio`, copy it to
    `/build/out/gbos_stage0.cpio`, and build again so it's embedded. `arch/x86/boot/bzImage` is
