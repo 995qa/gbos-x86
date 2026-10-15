@@ -70,6 +70,16 @@ service gbos_sync /system/bin/sh -c "while true; do sleep 5; sync; done"
     group root
     seclabel u:r:shell:s0
 
+# Sound diagnostics, 60 s after boot: ALSA cards/PCMs/codec (incl. control names) and audioserver state.
+service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; head -n 3000 cards pcm devices card0/id card0/codec*; ls -l /dev/snd; dumpsys media.audio_flinger; dumpsys media.audio_policy"
+    user root
+    group root audio
+    seclabel u:r:shell:s0
+    oneshot
+    stdio_to_kmsg
+on property:sys.boot_completed=1
+    start gbos_audiodiag
+
 # Software Gatekeeper (gatekeeper/soft_gk.c) in place of the Trusty one, which never answers.
 service gbos_soft_gk /postinstall/gbos/soft_gk
     class hal
