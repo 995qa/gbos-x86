@@ -93,3 +93,9 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   A full reinstall first saves the old install's logs to the stick. ACTION=update|install in gbos.cfg skips
   the question. A stick left in MODE=install once reinstalled over the user's working system (they aborted
   it midway, NVMe corrupt -> full reinstall); Play-install-stuck-at-100% logs were lost with it.
+- Sound: kernel side works (ALC3254 found). dras loaded our config but never matched "HDA Intel PCH":
+  it compares <soundcard> to the ALSA card id (sof-soundwire -> id sofsoundwire). Now <soundcard>PCH</soundcard>.
+- Play installs: not broken, slow. PP-Copy (SHA-256 via Conscrypt) took ~5 min for Spotify's 33 MB apk.
+  With the libcrypto patches deployed, Spotify installs (user confirmed).
+- Linux Terminal: Debian download+unpack took ~11 min. Then virtualizationservice.allocateInstanceId waited
+  56 s for ISecretkeeper/default (Trusty). hook.sh now hides Secretkeeper (VINTF + rc).

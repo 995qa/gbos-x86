@@ -183,6 +183,13 @@ mkdir -p /tmp/vapex && mount --bind /new/vendor/apex /tmp/vapex \
 W=/new/vendor/etc/vintf/manifest/android.hardware.weaver-service.android-desktop.xml
 [ -f $W ] && echo '<manifest version="9.0" type="device"/>' > /tmp/weaver.xml \
   && mount --bind /tmp/weaver.xml $W && log "hook: Weaver VINTF declaration hidden"
+# Secretkeeper is Trusty-backed too (VSOCK:200) and never answers. virtualizationservice waits for it
+# in allocateInstanceId, so the Linux Terminal's VM never starts. Undeclared, AVF goes without it.
+SK=/new/vendor/etc/vintf/manifest/android.hardware.security.secretkeeper.trusty.xml
+[ -f $SK ] && echo '<manifest version="9.0" type="device"/>' > /tmp/secretkeeper.xml \
+  && mount --bind /tmp/secretkeeper.xml $SK && : > /tmp/empty.rc \
+  && mount --bind /tmp/empty.rc /new/vendor/etc/init/android.hardware.security.secretkeeper.trusty.desktop.rc \
+  && log "hook: Secretkeeper VINTF declaration hidden"
 # Gatekeeper is Trusty-backed (VSOCK:200) and enroll never returns, so setting a lock-screen
 # password hangs LockSettingsService (and every Settings screen waiting on it). Keep the VINTF
 # declaration but don't start the Trusty service: gbos_soft_gk (gbos.rc above) registers
