@@ -72,3 +72,12 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   KeyMint won't accept its tokens (auth-bound keys won't work). Installed as gbos/soft_gk + gbos_soft_gk service
   (hal_gatekeeper_default); Trusty gatekeeper rc disabled. Not yet run on hardware.
 - boot-26: reached the desktop with soft_gk; user reports it's smooth. Committed as 03a6a46 (new git repo, images/binaries gitignored).
+- Laptop is a Dell Latitude 5300 (DMI), not an Inspiron. Kernel #20 adds ACPI battery/AC, Intel LPSS PCI
+  (I2C touchpad was stuck on its PS/2 fallback), and legacy HDA audio (snd_hda_intel + ALC269 + HDMI,
+  snd_intel_dspcfg.dsp_driver=1). Google's vendor modules for these never loaded (wrong kernel).
+  usb/audio/: gbos-hda-pch config for the dras audio HAL (audio_default.xml -> card "HDA Intel PCH").
+- NVMe installer: usb/install.sh (MODE=install in gbos.cfg), tools in usb/installer (Alpine sfdisk/mke2fs/
+  mkfs.fat + musl). Layout: GBOS_EFI 512M, GBOSSYS 8G FAT32, GBOS_META 64M ext4, GBOS_DATA rest ext4.
+  stage0 boots GBOSSYS when no stick (or stick lacks MODE=install/BOOT_FROM=stick) and mounts ext4 data.
+  QEMU: cancel path tested (wrong serial -> nothing written). Full install and NVMe boot NOT tested (user
+  chose to go straight to hardware; burner laptop). Stick has #20 + MODE=install.

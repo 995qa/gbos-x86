@@ -171,6 +171,16 @@ fi
 F=/new/vendor/etc/fstab.android-desktop
 grep -v 'voldmanaged=usb' $F > /tmp/fstab.android-desktop \
   && mount --bind /tmp/fstab.android-desktop $F && log "hook: vold USB rule removed from fstab"
+# Audio: our kernel has the legacy HDA driver (card PCH) instead of Google's SOF SoundWire card.
+# Point the audio HAL's default config at gbos/audio/gbos-hda-pch, added next to the vendor ones.
+A=/new/vendor/etc/audio
+if [ -f $G/audio/gbos-hda-pch/audio_config.xml ]; then
+  mkdir -p /tmp/vaudio && mount --bind $A /tmp/vaudio && mount -t tmpfs -o mode=0755 tmpfs $A \
+    && for f in /tmp/vaudio/*; do n=${f##*/}; { [ -d $f ] && mkdir -p $A/$n || touch $A/$n; } && mount --bind $f $A/$n; done \
+    && mkdir -p $A/gbos-hda-pch && mount --bind $G/audio/gbos-hda-pch $A/gbos-hda-pch \
+    && mount --bind $G/audio/audio_default.xml /new/vendor/etc/data/hal_configs/audio_default.xml \
+    && log "hook: audio config gbos-hda-pch (legacy HDA card PCH) active"
+fi
 # apgetty (UART shell) has no UART configured here and crash-loops
 : > /tmp/empty.rc && mount --bind /tmp/empty.rc /new/system_ext/etc/init/apgetty.rc && log "hook: apgetty disabled"
 log "hook: kvm: $(ls /sys/class/misc | grep -E 'kvm|vhost' | tr '\n' ' ')"

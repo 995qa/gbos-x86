@@ -31,8 +31,17 @@ OVERRIDES = {
     'I2C_HID': 'y', 'I2C_HID_ACPI': 'y', 'I2C_DESIGNWARE_CORE': 'y', 'I2C_DESIGNWARE_PLATFORM': 'y',
     'PINCTRL_CANNONLAKE': 'y', 'KEYBOARD_ATKBD': 'y', 'MOUSE_PS2': 'y',
     'BLK_DEV_DM': 'y', 'DM_VERITY': 'y', 'EXT4_FS': 'y', 'EROFS_FS': 'y',
-    # Intel Wi-Fi (Inspiron 5300 ships Intel CNVi cards).
+    # Intel Wi-Fi (the Latitude 5300 has a CNVi 9560, 8086:9df0).
     'CFG80211': 'm', 'MAC80211': 'm', 'WLAN_VENDOR_INTEL': 'y', 'IWLWIFI': 'm', 'IWLMVM': 'm',
+    # Battery/AC: Google builds these as modules, which won't load on this kernel.
+    'ACPI_BATTERY': 'y', 'ACPI_AC': 'y',
+    # Touchpad: the I2C controllers (8086:9de8/9de9) are LPSS PCI devices. Without this the touchpad
+    # is only its PS/2 fallback (no scrolling or gestures).
+    'MFD_INTEL_LPSS': 'y', 'MFD_INTEL_LPSS_PCI': 'y',
+    # Audio: legacy HDA + Realtek ALC3254 (ALC269 family) + HDMI, instead of Google's SOF modules.
+    # Needs snd_intel_dspcfg.dsp_driver=1 on the cmdline (no internal DMIC this way).
+    'SND_HDA_INTEL': 'y', 'SND_HDA_GENERIC': 'y', 'SND_HDA_CODEC_REALTEK': 'y', 'SND_HDA_CODEC_ALC269': 'y',
+    'SND_HDA_CODEC_HDMI': 'y', 'SND_HDA_CODEC_HDMI_INTEL': 'y', 'SND_HDA_I915': 'y',
 }
 
 # These must come out exactly as requested after olddefconfig.

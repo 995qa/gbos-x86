@@ -1,0 +1,35 @@
+<?xml version='1.0' encoding='utf-8'?>
+<audio_config>
+	<!-- gbos: Latitude 5300, snd_hda_intel card PCH. Analog is PCM 0 (the codec switches
+	     speaker/headphone itself); HDMI/DP is PCM 3/7/8. The internal mic is a DMIC on the
+	     DSP, which needs SOF, so there is no InternalMic here. -->
+	<SoundCardName>hw:PCH</SoundCardName>
+	<HiFi>
+		<Speaker>
+			<PlaybackPCM>hw:PCH,0</PlaybackPCM>
+		</Speaker>
+		<Headphone>
+			<PlaybackPCM>hw:PCH,0</PlaybackPCM>
+			<JackDev>HDA Intel PCH Headphone</JackDev>
+		</Headphone>
+		<Mic>
+			<CapturePCM>hw:PCH,0</CapturePCM>
+			<JackDev>HDA Intel PCH Headset Mic</JackDev>
+		</Mic>
+		<HDMI1>
+			<PlaybackPCM>hw:PCH,3</PlaybackPCM>
+			<JackDev>HDA Intel PCH HDMI/DP,pcm=3</JackDev>
+			<PlaybackChannels>2</PlaybackChannels>
+		</HDMI1>
+		<HDMI2>
+			<PlaybackPCM>hw:PCH,7</PlaybackPCM>
+			<JackDev>HDA Intel PCH HDMI/DP,pcm=7</JackDev>
+			<PlaybackChannels>2</PlaybackChannels>
+		</HDMI2>
+		<HDMI3>
+			<PlaybackPCM>hw:PCH,8</PlaybackPCM>
+			<JackDev>HDA Intel PCH HDMI/DP,pcm=8</JackDev>
+			<PlaybackChannels>2</PlaybackChannels>
+		</HDMI3>
+	</HiFi>
+</audio_config>

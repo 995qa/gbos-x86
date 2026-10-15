@@ -21,17 +21,29 @@ for i in $(seq 0 15); do mknod -m 660 /dev/loop$i b 7 $i 2>/dev/null; done
 mkdir -p -m 0755 /dev/socket /dev/block /dev/pts /dev/dm-user /dev/mapper
 mknod -m 600 /dev/mapper/control c 10 236; mknod -m 600 /dev/device-mapper c 10 236
 
-# Wait for the USB stick (label GBOS)
-log "waiting for USB volume LABEL=GBOS ..."
-DEV=
+# Find the gbos volume: the USB stick (label GBOS) or an NVMe install (label GBOSSYS, made by
+# gbos/install.sh). The stick wins when present, unless the NVMe install exists and the stick's
+# gbos.cfg doesn't ask for it (MODE=install or BOOT_FROM=stick). NVMe shows up long before USB,
+# so give the stick a few seconds after GBOSSYS appears.
+log "waiting for LABEL=GBOS (USB) or LABEL=GBOSSYS (NVMe) ..."
+STICK=; SYS=; n=0
 for i in $(seq 1 60); do
   mdev -s
-  DEV=$(findfs LABEL=GBOS 2>/dev/null) && [ -n "$DEV" ] && break
+  STICK=$(findfs LABEL=GBOS 2>/dev/null)
+  SYS=$(findfs LABEL=GBOSSYS 2>/dev/null)
+  [ -n "$STICK" ] && break
+  [ -n "$SYS" ] && { n=$((n+1)); [ $n -ge 6 ] && break; }
   sleep 1
 done
-[ -n "$DEV" ] || fail "USB volume GBOS not found after 60s (block devices: $(ls /sys/class/block | tr '\n' ' '))"
-log "found GBOS at $DEV"
+[ -n "$STICK$SYS" ] || fail "no GBOS (USB) or GBOSSYS (NVMe) volume after 60s (block devices: $(ls /sys/class/block | tr '\n' ' '))"
 mkdir -p /gbos
+DEV=$STICK; FROM=stick
+if [ -n "$STICK" ] && [ -n "$SYS" ]; then
+  mount -t vfat -o ro $STICK /gbos && { grep -qE '^(MODE=install|BOOT_FROM=stick)' /gbos/gbos/gbos.cfg 2>/dev/null || { DEV=$SYS; FROM=nvme; }; umount /gbos; }
+elif [ -n "$SYS" ]; then
+  DEV=$SYS; FROM=nvme
+fi
+log "found gbos volume on $FROM at $DEV (stick=${STICK:-none} nvme=${SYS:-none})"
 mount -t vfat -o rw,flush,umask=000 $DEV /gbos || fail "mount $DEV failed"
 G=/gbos/gbos
 cp /bin/busybox /gbos/busybox 2>/dev/null
@@ -46,8 +58,9 @@ log "logging to USB: gbos/logs/boot-$N/kmsg.log"
 ( while /gbos/busybox sleep 5; do /gbos/busybox sync; done ) &
 
 # Config file on the stick (edit from any computer)
-SHELL_AT=none; LOAD_I915=1; LOAD_WIFI=0; EXTRA_SLEEP=0
-[ -f $G/gbos.cfg ] && . $G/gbos.cfg && log "loaded gbos.cfg: SHELL_AT=$SHELL_AT LOAD_I915=$LOAD_I915 LOAD_WIFI=$LOAD_WIFI"
+SHELL_AT=none; LOAD_I915=1; LOAD_WIFI=0; EXTRA_SLEEP=0; MODE=boot
+[ -f $G/gbos.cfg ] && . $G/gbos.cfg && log "loaded gbos.cfg: MODE=$MODE SHELL_AT=$SHELL_AT LOAD_I915=$LOAD_I915 LOAD_WIFI=$LOAD_WIFI"
+[ $FROM = nvme ] && MODE=boot
 
 # Hardware inventory
 {
@@ -73,6 +86,13 @@ if [ "$LOAD_I915" = 1 ]; then
 fi
 if [ "$LOAD_WIFI" = 1 ]; then
   log "modprobe iwlmvm"; modprobe iwlmvm && log "iwlmvm loaded" || log "iwlmvm load FAILED"
+fi
+
+# Install to NVMe instead of booting (gbos.cfg MODE=install on the stick). install.sh never returns.
+if [ "$MODE" = install ]; then
+  [ -f $G/install.sh ] || fail "MODE=install but gbos/install.sh is missing"
+  log "MODE=install: running gbos/install.sh"; . $G/install.sh
+  fail "install.sh returned"
 fi
 
 # Android partitions. Preferred: gbos/super.img (liblp dynamic partitions, layout in
@@ -121,8 +141,28 @@ mdev -s
 
 [ "$SHELL_AT" = pre_android ] && shell "SHELL_AT=pre_android (Android root at /new)"
 
-mount -t tmpfs -o mode=0771 tmpfs /new/data
-mount -t tmpfs tmpfs /new/metadata
+# /data and /metadata: the NVMe install's ext4 partitions (persistent), else tmpfs (fresh each boot).
+# ext4 is made without the encrypt feature, so vold behaves as it did on tmpfs (no fscrypt).
+DATA=; META=
+if [ $FROM = nvme ]; then
+  DATA=$(findfs LABEL=GBOS_DATA 2>/dev/null); META=$(findfs LABEL=GBOS_META 2>/dev/null)
+fi
+e2fsck_p() { [ -x $G/installer/bin/e2fsck ] && $G/installer/lib/ld-musl-x86_64.so.1 --library-path $G/installer/lib $G/installer/bin/e2fsck -p "$1" >> $L/fsck.txt 2>&1; log "e2fsck -p $1 rc=$?"; }
+if [ -n "$DATA" ] && [ -n "$META" ]; then
+  e2fsck_p $META; e2fsck_p $DATA
+  mount -t ext4 -o noatime,nosuid,nodev $META /new/metadata && log "metadata: ext4 $META" \
+    || { log "metadata ext4 mount FAILED, using tmpfs"; mount -t tmpfs tmpfs /new/metadata; }
+  if mount -t ext4 -o noatime,nosuid,nodev $DATA /new/data; then
+    log "data: ext4 $DATA ($(df -h /new/data | awk 'NR==2{print $4}') free)"
+    [ -e /new/data/.gbos_init ] || { chown 1000:1000 /new/data; chmod 0771 /new/data; : > /new/data/.gbos_init; }
+  else
+    log "data ext4 mount FAILED, using tmpfs"; mount -t tmpfs -o mode=0771 tmpfs /new/data
+  fi
+else
+  mount -t tmpfs -o mode=0771 tmpfs /new/data
+  mount -t tmpfs tmpfs /new/metadata
+  log "data/metadata: tmpfs (not persistent)"
+fi
 mount -t devpts devpts /dev/pts -o mode=0620,ptmxmode=0666 2>/dev/null
 mknod -m 666 /dev/ptmx c 5 2 2>/dev/null; mknod -m 666 /dev/zero c 1 5 2>/dev/null
 mknod -m 666 /dev/random c 1 8 2>/dev/null; mknod -m 666 /dev/urandom c 1 9 2>/dev/null

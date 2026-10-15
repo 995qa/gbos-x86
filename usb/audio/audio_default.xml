@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- gbos: legacy HDA card on the Latitude 5300 (snd_hda_intel + ALC3254), replacing sof-soundwire. -->
+<AudioConfiguration>
+  <soundcard>HDA Intel PCH</soundcard>
+  <audio-config-dir>gbos-hda-pch</audio-config-dir>
+</AudioConfiguration>
