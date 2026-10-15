@@ -1,6 +1,6 @@
 #!/bin/busybox sh
-# gbos USB debug stage0: find the GBOS USB volume, log everything to it,
-# mount the lapis erofs images, create dm devices, switch to Android init.
+# gbOS86 stage0: find the gbOS86 volume (USB stick or NVMe install), show the boot menu, log
+# everything to it, mount the lapis erofs images, create dm devices, switch to Android init.
 export PATH=/bin:/sbin
 /bin/busybox --install -s /bin
 mount -t proc proc /proc; mount -t sysfs sysfs /sys; mount -t tmpfs -o mode=0755 tmpfs /dev
@@ -14,7 +14,7 @@ shell() {
 }
 fail() { log "FATAL: $*"; shell "failure"; }
 
-log "=== gbos-x86 USB debug boot, kernel $(uname -r) ==="
+log "=== gbOS86 boot, kernel $(uname -r) ==="
 mdev -s
 mknod -m 660 /dev/loop-control c 10 237 2>/dev/null
 for i in $(seq 0 15); do mknod -m 660 /dev/loop$i b 7 $i 2>/dev/null; done
@@ -37,9 +37,43 @@ for i in $(seq 1 60); do
 done
 [ -n "$STICK$SYS" ] || fail "no GBOS (USB) or GBOSSYS (NVMe) volume after 60s (block devices: $(ls /sys/class/block | tr '\n' ' '))"
 mkdir -p /gbos
-DEV=$STICK; FROM=stick
-if [ -n "$STICK" ] && [ -n "$SYS" ]; then
-  mount -t vfat -o ro $STICK /gbos && { grep -qE '^(MODE=install|BOOT_FROM=stick)' /gbos/gbos/gbos.cfg 2>/dev/null || { DEV=$SYS; FROM=nvme; }; umount /gbos; }
+DEV=$STICK; FROM=stick; SELMODE=
+# gbOS86 boot menu, shown when booting from the stick. The stick's gbos.cfg can skip it:
+#   MODE=install -> installer/updater, MODE=live (or BOOT_FROM=stick) -> live from the stick,
+#   MODE=boot -> the NVMe install if there is one, else live. Unset/MODE=ask -> menu.
+boot_menu() {
+  def=1; [ -n "$SYS" ] && def=3
+  chvt 1 2>/dev/null; clear > /dev/tty1 2>/dev/null
+  {
+    echo; echo "   gbOS86"; echo "   ------"; echo
+    echo "   1) Run gbOS86 live from this USB (nothing is saved)"
+    echo "   2) Install or update gbOS86 on this laptop's internal SSD"
+    [ -n "$SYS" ] && echo "   3) Boot the installed gbOS86"
+    echo; printf "   Choose 1-%s [default %s in 10 s]: " "$([ -n "$SYS" ] && echo 3 || echo 2)" $def
+  } > /dev/tty1
+  c=; read -t 10 -n 1 c < /dev/tty1; echo > /dev/tty1
+  case "$c" in 1|2) ;; 3) [ -n "$SYS" ] || c=$def;; *) c=$def;; esac
+  log "boot menu: choice $c (default $def)"
+  CHOICE=$c
+}
+if [ -n "$STICK" ]; then
+  CFGMODE=
+  mount -t vfat -o ro $STICK /gbos 2>/dev/null && {
+    CFGMODE=$(sed -n 's/^MODE=//p' /gbos/gbos/gbos.cfg 2>/dev/null | tail -1)
+    grep -q '^BOOT_FROM=stick' /gbos/gbos/gbos.cfg 2>/dev/null && CFGMODE=live
+    umount /gbos
+  }
+  case "$CFGMODE" in
+    install) CHOICE=2;;
+    live) CHOICE=1;;
+    boot) if [ -n "$SYS" ]; then CHOICE=3; else CHOICE=1; fi;;
+    *) boot_menu;;
+  esac
+  case "$CHOICE" in
+    1) SELMODE=boot;;
+    2) SELMODE=install;;
+    3) DEV=$SYS; FROM=nvme;;
+  esac
 elif [ -n "$SYS" ]; then
   DEV=$SYS; FROM=nvme
 fi
@@ -60,6 +94,9 @@ log "logging to USB: gbos/logs/boot-$N/kmsg.log"
 # Config file on the stick (edit from any computer)
 SHELL_AT=none; LOAD_I915=1; LOAD_WIFI=0; EXTRA_SLEEP=0; MODE=boot
 [ -f $G/gbos.cfg ] && . $G/gbos.cfg && log "loaded gbos.cfg: MODE=$MODE SHELL_AT=$SHELL_AT LOAD_I915=$LOAD_I915 LOAD_WIFI=$LOAD_WIFI"
+# The boot menu's choice wins over gbos.cfg's MODE (ask/live are menu-level settings).
+[ -n "$SELMODE" ] && MODE=$SELMODE
+case "$MODE" in install) ;; *) MODE=boot;; esac
 [ $FROM = nvme ] && MODE=boot
 
 # Hardware inventory

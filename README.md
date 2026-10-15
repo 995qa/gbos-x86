@@ -1,4 +1,4 @@
-# gbos-x86
+# gbos-x86 (gbOS86)
 
 Google's **Googlebook OS** (the `lapis` Android desktop build) running on an ordinary laptop: a
 **Dell Latitude 5300** (Intel i5-8365U "Whiskey Lake", UHD 620, 16 GB). It boots from a USB stick or
@@ -88,9 +88,10 @@ changing anything.
 | `usb/hook.sh` | Android workarounds, run by stage0 before switch_root; writes `gbos.rc` (init services) |
 | `usb/install.sh` | NVMe installer and updater (`MODE=install`) |
 | `usb/apex_patch.sh` | binds the patched libcrypto over the APEX copies (run from init.rc) |
-| `usb/gbos.cfg` | user settings: `MODE`, `DENSITY`, `LOAD_I915`, `SHELL_AT`, ... |
+| `usb/gbos.cfg` | user settings: `MODE` (ask/live/install/boot), `DENSITY`, `RESOLUTION`, `LOAD_I915`, ... |
+| `tools/make_gbos86_image.sh` | builds the flashable gbOS86 USB image into `dist/` |
 | `usb/audio/` | audio HAL config for the HDA card |
-| `usb/out/BOOTX64.EFI` | **current kernel** (build #29), boots directly from UEFI |
+| `usb/out/BOOTX64.EFI` | **current kernel** (build #30: #29 + gbOS86 boot menu), boots directly from UEFI |
 | `usb/patched/`, `usb/libkm_compat.so` | patched Google libraries (private) |
 | `usb/kmod/` | `btusb`, `btintel`, `btrtl` built for kernel #29 |
 | `usb/installer/` | Alpine `sfdisk`/`mke2fs`/`e2fsck`/`mkfs.fat`/`blkid` + musl (`tools/fetch_installer_tools.sh`) |
@@ -106,6 +107,14 @@ changing anything.
 | `lapis/` | download script, ISA scan results, QEMU userspace harness |
 
 ## Using it
+
+### gbOS86 USB image (live + installer)
+`tools/make_gbos86_image.sh` builds `dist/gbOS86-YYYYMMDD.img` (~6.3 GiB) from the repo plus Google's
+extracted partitions (`lapis/parts/*_a.img`). Write it to an 8 GB+ stick with balenaEtcher, Rufus or `dd`.
+Booting it shows the **gbOS86 menu** (10 s timeout): **1** live from the USB (nothing saved), **2** install
+or update on the internal SSD, **3** boot the installed system (offered, and the default, when one exists).
+`MODE` in `gbos/gbos.cfg` skips the menu (`live`, `install`, `boot`; `ask` = menu). The image holds Google's
+OS and patched Google libraries: for your own use only.
 
 ### Boot from the USB stick
 The stick has two partitions: **`EFI`** (FAT, `EFI/BOOT/BOOTX64.EFI`) and **`GBOS`** (FAT32: `/busybox`,

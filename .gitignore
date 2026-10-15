@@ -37,3 +37,6 @@ __pycache__/
 # Logs and run markers
 *.log
 *.done
+
+# Built gbOS86 images (Google OS inside: never commit or share)
+/dist/

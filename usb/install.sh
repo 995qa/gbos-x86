@@ -1,4 +1,4 @@
-# gbos NVMe installer. Sourced by stage0 when the stick's gbos.cfg has MODE=install, after the
+# gbOS86 NVMe installer/updater. Sourced by stage0 for menu choice 2 (or gbos.cfg MODE=install), after the
 # stick is mounted at /gbos ($G=/gbos/gbos, log dir $L, stick partition $DEV) and drivers loaded.
 #
 # ERASES THE WHOLE TARGET NVMe and lays it out as:
@@ -21,7 +21,7 @@ check() { a=$(sha256sum "$1" | cut -d' ' -f1); b=$(sha256sum "$2" | cut -d' ' -f
 chvt 1 2>/dev/null
 clear > $TTY 2>/dev/null
 say "=============================================================="
-say " gbos NVMe installer"
+say " gbOS86 installer"
 say "=============================================================="
 
 # Everything this needs must be on the stick before anything is touched.
@@ -43,7 +43,7 @@ tool sfdisk --version > /dev/null 2>&1 || die "partitioning tools in gbos/instal
 NSYS=$(findfs LABEL=GBOSSYS 2>/dev/null); NEFI=$(findfs LABEL=GBOS_EFI 2>/dev/null); NDATA=$(findfs LABEL=GBOS_DATA 2>/dev/null)
 if [ -z "$ACTION" ] && [ -n "$NSYS" ] && [ -n "$NEFI" ] && [ -n "$NDATA" ]; then
   # An install exists: never erase it just because the stick was left in. Ask.
-  say "Found an existing gbos install on the NVMe."
+  say "Found an existing gbOS86 install on the NVMe."
   say "  1) Update it: keep apps, accounts and settings; save its logs to this stick"
   say "  2) Reinstall: ERASE the NVMe and install from scratch"
   say "  anything else: cancel"
@@ -165,7 +165,7 @@ umount /mnt/nefi /mnt/nsys /mnt/stickefi; sync
 
 say ""
 say "=============================================================="
-say " Installed to $TD."
+say " gbOS86 is installed on $TD."
 say " Remove the USB stick, then turn the laptop back on. If it doesn't"
 say " boot gbos, press F12 at the Dell logo and pick the NVMe/UEFI entry"
 say " (or add \\EFI\\BOOT\\BOOTX64.EFI as a boot option in BIOS setup)."

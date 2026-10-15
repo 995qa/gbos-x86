@@ -133,3 +133,8 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   LOG_GAMMA_LUT -> GAMMA_LUT fallback (an xe log-gamma curve in i915's linear LUT). Fix: i915_ignore_gamma.sh.
   The colour-space (#23/#25), full-range (#27) and sRGB-only SF props weren't the cause but are kept (harmless,
   more correct for this sRGB panel). Known cost: Night Light has no effect.
+- gbOS86 branding + boot menu in stage0 (kernel #30, initramfs-only change): with the stick in, a 10 s menu offers
+  1 live / 2 install-or-update / 3 boot the installed system (default 3 if installed, else 1). gbos.cfg MODE=ask|live|
+  install|boot (old BOOT_FROM=stick = live). Menu timeout path tested in QEMU. tools/make_gbos86_image.sh builds
+  dist/gbOS86-YYYYMMDD.img (GPT: 256M EFI + 6G GBOS FAT32, super.img rebuilt from lapis/parts). First image
+  gbOS86-20261016.img built; not boot-tested (user declined).
