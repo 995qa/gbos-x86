@@ -99,3 +99,11 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   With the libcrypto patches deployed, Spotify installs (user confirmed).
 - Linux Terminal: Debian download+unpack took ~11 min. Then virtualizationservice.allocateInstanceId waited
   56 s for ISecretkeeper/default (Trusty). hook.sh now hides Secretkeeper (VINTF + rc).
+- boot-3 (NVMe, collected in stick boot-34): dras now finds card PCH but rejected audio_config.xml:
+  "missing field JackSwitch" (fields inside a section are required, sections are optional, cf. USB configs).
+  Config now mirrors sof-soundwire field for field; jack is "HDA Intel PCH Headphone Mic" (combo).
+  Codec has an internal mic on pin 0x12, so InternalMic is configured on PCM 0.
+- Bluetooth: btintel loads firmware at probe (pre-switch_root) but the path was already /postinstall:
+  "Failed to load Intel firmware file intel/ibt-17-16-1.sfi (-2)". hook now points at $G/firmware while
+  btusb probes and waits for "Firmware loaded".
+- audiodiag stdio_to_kmsg output was lost; now writes logs/boot-N/audio.txt.

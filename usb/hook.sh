@@ -19,13 +19,18 @@ fi
 
 # Bluetooth: the 9560's Bluetooth is a USB device (8087:0aaa) and needs btusb, which Google's kernel
 # (PCIe Bluetooth) doesn't build. gbos/kmod/ has btusb/btintel/btrtl from our tree; bluetooth and btbcm
-# are in the initramfs. Firmware (intel/ibt-17-16-1.sfi/.ddc) loads when Android powers Bluetooth on,
-# from /postinstall/gbos/firmware.
+# are in the initramfs. Firmware: intel/ibt-17-16-1.sfi/.ddc in gbos/firmware.
 if [ -f $G/kmod/btusb.ko ]; then
+  [ -f $G/firmware/intel/ibt-17-16-1.sfi ] || log "hook: Bluetooth firmware intel/ibt-17-16-1.sfi missing"
+  # btintel loads the firmware during probe, i.e. right now: the loader must look on this volume
+  # ($G), not at /postinstall, which only exists after switch_root.
+  echo -n $G/firmware > $FWP
   modprobe bluetooth && modprobe btbcm && insmod $G/kmod/btintel.ko && insmod $G/kmod/btrtl.ko \
     && insmod $G/kmod/btusb.ko && log "hook: btusb loaded ($(ls /sys/class/bluetooth 2>/dev/null | tr '\n' ' '))" \
     || log "hook: btusb load FAILED: $(dmesg | grep -iE 'btusb|btintel|bluetooth' | tail -2 | tr '\n' ' ')"
-  [ -f $G/firmware/intel/ibt-17-16-1.sfi ] || log "hook: Bluetooth firmware intel/ibt-17-16-1.sfi missing"
+  i=0; while [ $i -lt 20 ] && ! dmesg | grep -qE 'hci0: (Firmware loaded|Failed to load Intel firmware)'; do sleep 1; i=$((i+1)); done
+  log "hook: bluetooth: $(dmesg | grep -oE 'hci0: (Firmware loaded in [0-9]+ usecs|Failed to load Intel firmware[^)]*\)|Found device firmware: [^ ]+)' | tr '\n' ' ')"
+  echo -n /postinstall/gbos/firmware > $FWP
 fi
 
 # Fake ChromeOS boot disk for the boot HAL: misc + vbmeta_a/vbmeta_b with cgpt slot attributes.
@@ -71,12 +76,11 @@ service gbos_sync /system/bin/sh -c "while true; do sleep 5; sync; done"
     seclabel u:r:shell:s0
 
 # Sound diagnostics, 60 s after boot: ALSA cards/PCMs/codec (incl. control names) and audioserver state.
-service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; head -n 3000 cards pcm devices card0/id card0/codec*; ls -l /dev/snd; dumpsys media.audio_flinger; dumpsys media.audio_policy"
+service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; ( head -n 3000 cards pcm devices card0/id card0/codec*; ls -l /dev/snd; dumpsys media.audio_flinger; dumpsys media.audio_policy ) > /postinstall/gbos/logs/boot-$N/audio.txt 2>&1"
     user root
     group root audio
     seclabel u:r:shell:s0
     oneshot
-    stdio_to_kmsg
 on property:sys.boot_completed=1
     start gbos_audiodiag
 

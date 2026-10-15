@@ -1,8 +1,12 @@
 <?xml version='1.0' encoding='utf-8'?>
 <audio_config>
-	<!-- gbos: Latitude 5300, snd_hda_intel card PCH. Analog is PCM 0 (the codec switches
-	     speaker/headphone itself); HDMI/DP is PCM 3/7/8. The internal mic is a DMIC on the
-	     DSP, which needs SOF, so there is no InternalMic here. -->
+	<!-- gbos: Latitude 5300, snd_hda_intel card PCH (ALC3254). Section layout mirrors Google's
+	     sof-soundwire config field for field: dras rejects the whole file on a missing field
+	     (e.g. Headphone without JackSwitch).
+	     Analog is PCM 0 (the codec auto-mutes the speaker when the jack is used); HDMI/DP is PCM 3/7/8.
+	     The jack is a headset combo: one input device "HDA Intel PCH Headphone Mic" reports both
+	     SW_HEADPHONE_INSERT (2) and SW_MICROPHONE_INSERT (4). The internal mic is on the codec
+	     (pin 0x12), so it works with the legacy HDA driver too. -->
 	<SoundCardName>hw:PCH</SoundCardName>
 	<HiFi>
 		<Speaker>
@@ -10,11 +14,18 @@
 		</Speaker>
 		<Headphone>
 			<PlaybackPCM>hw:PCH,0</PlaybackPCM>
-			<JackDev>HDA Intel PCH Headphone</JackDev>
+			<JackDev>HDA Intel PCH Headphone Mic</JackDev>
+			<JackSwitch>2</JackSwitch>
 		</Headphone>
+		<InternalMic>
+			<CapturePCM>hw:PCH,0</CapturePCM>
+			<IntrinsicSensitivity>-2600</IntrinsicSensitivity>
+			<RampUpMs>100</RampUpMs>
+		</InternalMic>
 		<Mic>
 			<CapturePCM>hw:PCH,0</CapturePCM>
-			<JackDev>HDA Intel PCH Headset Mic</JackDev>
+			<CaptureMixerElem>Capture</CaptureMixerElem>
+			<JackDev>HDA Intel PCH Headphone Mic</JackDev>
 		</Mic>
 		<HDMI1>
 			<PlaybackPCM>hw:PCH,3</PlaybackPCM>
