@@ -1,0 +1,48 @@
+# Notes for agents working on gbos-x86
+
+Read `README.md` (what/how) and `HANDOFF.md` (chronological log of every bug and fix) first.
+
+## Hard rules
+- **Never erase the user's NVMe without them typing the serial on the laptop.** Don't add bypasses.
+  `gbos_install_confirm=` on the kernel cmdline exists for QEMU tests only.
+- **Keep the repo private.** `usb/patched/` and `usb/libkm_compat.so` are modified Google binaries.
+- Ask before downloading anything (firmware, images) and say what, from where, and how big.
+- After changing a file on the stick, make the same change in `usb/` here, or copy it from here (they must
+  match), and commit.
+
+## Workflow with the user
+- The laptop has no shell/adb. All evidence comes from logs on the stick. Ask the user to boot the stick
+  and choose **1 (Update)**, which copies the NVMe install's last 3 boots to
+  `gbos/logs/boot-N/nvme-logs/` on the stick. Then plug the stick into the Mac.
+- Deploy = copy files to the stick, eject, user boots the stick and picks **1**. Kernel changes go to
+  **both** `/Volumes/EFI/EFI/BOOT/BOOTX64.EFI` (what the firmware boots) and `GBOS/EFI/BOOT/`.
+- The stick mounts on macOS as `/Volumes/EFI` and `/Volumes/GBOS`; the disk number changes. Eject with
+  `diskutil eject` after `sync`.
+
+## Traps that already cost hours
+- **Absence of an error is not success.** Check the log actually covers the time of the event (logs were
+  truncated by FAT corruption, and by booting an old kernel from the wrong EFI copy).
+- **Confirm the running kernel:** `Linux version ... #N` in `kmsg.log`.
+- **FAT logs:** reading past a file's real cluster chain gives zeros or EINVAL; copy with
+  `dd conv=noerror,sync` and strip NULs. Never let Android (vold) mount the stick.
+- **init `exec`/`service` need an explicit `seclabel`.** Init refuses an exec with no domain transition
+  even in permissive mode.
+- **`$` in an init `.rc` line is a property reference.** Don't use shell variables there.
+- **The firmware loader path:** modules probed in stage0 (before switch_root) load firmware from `$G/firmware`;
+  after switch_root the stick is at `/postinstall/gbos/firmware`.
+- **Google's audio HAL (`dras`)** matches `<soundcard>` against the ALSA card **id** (`PCH`), and rejects a
+  config section that is missing any field the sof-soundwire config has.
+- **Hash-pinned patches:** `hook.sh`/`apex_patch.sh` only bind a patched library when the original's
+  sha256 matches. A new Google build disables them silently; look for `NOT patched` in `stage0-dmesg.txt`.
+- **Trusty-backed services** (Weaver, Gatekeeper, Secretkeeper, KeyMint, GSC) never answer here. A hang
+  that waits on one ("Waited one second for ...") means hide or replace it in `hook.sh`.
+
+## Where things run
+- Kernel builds: docker volume `gbos-ksrc` (`/build/src`, `/build/out`), image `gbos-kbuild`,
+  `kernel/isa_emu_patch/build.sh`. Modules for kernel #20 must come from the same tree.
+- Emulator test: `kernel/isa_emu_test/run_qemu.py <bzImage>` must print `ISA_EMU_TEST_PASS`.
+- Shell syntax checks: `sh -n usb/hook.sh usb/install.sh usb/stage0_init.sh usb/apex_patch.sh`.
+
+## Commits
+End messages with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Add a dated line to
+`HANDOFF.md` for anything learned on hardware.

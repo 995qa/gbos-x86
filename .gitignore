@@ -1,32 +1,39 @@
 # Separate repository
 /gbrunch/
 
-# Google images, extracted trees and patched copies (GBs, not ours to redistribute)
+# Google images and extracted trees: GBs, over GitHub's 100 MB file limit. Rebuilt from Google's
+# recovery image (see README "Building from scratch").
 /lapis/parts/
 /lapis/probe/
 /lapis/apex/
 /lapis/patched/
+/lapis/qemu/*.cpio
 *.img
-*.cpio
+!/usb/bootdisk.img
 *.apex
 
-# Build output
+# Kernel build trees (the build itself lives in the gbos-ksrc docker volume)
 /kernel/out/
 /kernel/out_isa/
-/usb/out/
-/usb/modroot/
-/gatekeeper/soft_gk
-/usb/soft_gk
-*.o
-*.so
-__pycache__/
+/kernel/isa_emu_test/t
 
-# Firmware and patched Google libraries staged for the stick
+# Build intermediates. The deployable results ARE tracked:
+#   usb/out/BOOTX64.EFI   current kernel + stage0 initramfs
+#   usb/kmod/*.ko         Bluetooth modules
+#   usb/installer/        Alpine partitioning tools (tools/fetch_installer_tools.sh)
+#   usb/patched/*.so      patched Google libraries (libz, libcrypto): keep this repo PRIVATE
+#   usb/libkm_compat.so   patched Google library: keep this repo PRIVATE
+#   usb/soft_gk           software Gatekeeper
+#   usb/firmware/         Intel Wi-Fi/Bluetooth firmware (linux-firmware) + regulatory.db
+/usb/out/*
+!/usb/out/BOOTX64.EFI
+/usb/modroot/
+/usb/stage0.cpio
 /gatekeeper/libs/
-/usb/patched/
-/usb/firmware/
+/gatekeeper/soft_gk
+*.o
+__pycache__/
 
 # Logs and run markers
 *.log
 *.done
-/kernel/isa_emu_test/t

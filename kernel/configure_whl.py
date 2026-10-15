@@ -39,9 +39,12 @@ OVERRIDES = {
     # is only its PS/2 fallback (no scrolling or gestures).
     'MFD_INTEL_LPSS': 'y', 'MFD_INTEL_LPSS_PCI': 'y',
     # Audio: legacy HDA + Realtek ALC3254 (ALC269 family) + HDMI, instead of Google's SOF modules.
-    # Needs snd_intel_dspcfg.dsp_driver=1 on the cmdline (no internal DMIC this way).
+    # Needs snd_intel_dspcfg.dsp_driver=1 on the cmdline (isa_emu_patch/debug_cmdline.txt). The internal
+    # mic is on the codec (pin 0x12), so it works with this driver too.
     'SND_HDA_INTEL': 'y', 'SND_HDA_GENERIC': 'y', 'SND_HDA_CODEC_REALTEK': 'y', 'SND_HDA_CODEC_ALC269': 'y',
     'SND_HDA_CODEC_HDMI': 'y', 'SND_HDA_CODEC_HDMI_INTEL': 'y', 'SND_HDA_I915': 'y',
+    # Bluetooth: the 9560's Bluetooth is USB (8087:0aaa); Google's kernel only has PCIe Bluetooth.
+    'BT_HCIBTUSB': 'm', 'BT_HCIBTUSB_AUTOSUSPEND': 'y',
 }
 
 # These must come out exactly as requested after olddefconfig.
