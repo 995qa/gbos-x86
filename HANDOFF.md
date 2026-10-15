@@ -110,3 +110,8 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
 - Display: Google sets ro.sf.lcd_density=260; hook now replaces it with DENSITY from gbos.cfg (default 180). Update path syncs gbos.cfg (minus MODE/ACTION) to the NVMe. A 'Display size' set in Settings is stored as a forced density and overrides this; reset it to Default.
 - 2026-10-15: user confirms sound and Bluetooth work on the NVMe install (after 445b5ce). Density change (DENSITY=180) deployed to the stick.
 - Display looks washed out (grey blacks even in dark UIs). Added gbos_displaydiag -> logs/boot-N/display.txt (DRM state, i915 info, EDID, SurfaceFlinger, colour settings). Suspect limited RGB range or a colour matrix.
+- Pale display: panel is an LG LP133WF6 (8-bit, ~105% sRGB area per EDID), so not the hardware. SurfaceFlinger
+  outputs sRGB with an identity matrix, but drm_hwcomposer set eDP-1 colorspace=BT2020_RGB, so i915 sent a VSC SDP
+  with BT.2020 colorimetry and the panel gamut-mapped it (pale). kernel/isa_emu_patch/i915_edp_colorspace.sh:
+  eDP always uses default colorimetry (property kept). Kernel #23 (16/16 QEMU), on the stick; #20 kept as
+  usb/out/BOOTX64.EFI.prev-20.

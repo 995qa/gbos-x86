@@ -87,9 +87,9 @@ changing anything.
 | `usb/apex_patch.sh` | binds the patched libcrypto over the APEX copies (run from init.rc) |
 | `usb/gbos.cfg` | user settings: `MODE`, `DENSITY`, `LOAD_I915`, `SHELL_AT`, ... |
 | `usb/audio/` | audio HAL config for the HDA card |
-| `usb/out/BOOTX64.EFI` | **current kernel** (build #20), boots directly from UEFI |
+| `usb/out/BOOTX64.EFI` | **current kernel** (build #23), boots directly from UEFI |
 | `usb/patched/`, `usb/libkm_compat.so` | patched Google libraries (private) |
-| `usb/kmod/` | `btusb`, `btintel`, `btrtl` built for kernel #20 |
+| `usb/kmod/` | `btusb`, `btintel`, `btrtl` built for kernel #23 |
 | `usb/installer/` | Alpine `sfdisk`/`mke2fs`/`e2fsck`/`mkfs.fat`/`blkid` + musl (`tools/fetch_installer_tools.sh`) |
 | `usb/firmware/` | Intel Wi-Fi + Bluetooth firmware, `regulatory.db` |
 | `usb/soft_gk`, `gatekeeper/` | software Gatekeeper binary and source |
@@ -151,7 +151,9 @@ Needs macOS or Linux with docker, python3, qemu (for tests) and ~30 GB free. The
 4. **Config:** `kernel/configure_whl.py RECOVERY_KERNEL.config /build/out/.config`, then `make olddefconfig`;
    set `CONFIG_CMDLINE` from `kernel/isa_emu_patch/debug_cmdline.txt` (`debug_config.sh`) and
    `CONFIG_INITRAMFS_SOURCE=/build/out/gbos_stage0.cpio`.
-5. **Patches:** in the volume, `kernel/isa_emu_patch/apply.sh` and `kernel/ashmem_shim/apply.sh`.
+5. **Patches:** in the volume, `kernel/isa_emu_patch/apply.sh`, `kernel/ashmem_shim/apply.sh`, and the i915
+   scripts `kernel/isa_emu_patch/i915_color_pipeline.sh` (dummy plane COLOR_PIPELINE for the HWC) and
+   `i915_edp_colorspace.sh` (eDP always gets default colorimetry; BT.2020 made the panel pale).
 6. **Build:** `kernel/isa_emu_patch/build.sh` (in `gbos-kbuild`), then `make modules_install` into
    `usb/modroot`, then `usb/make_initramfs.py usb/modroot usb/stage0.cpio`, copy it to
    `/build/out/gbos_stage0.cpio`, and build again so it's embedded. `arch/x86/boot/bzImage` is
