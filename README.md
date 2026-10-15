@@ -58,6 +58,18 @@ UEFI firmware
    - `libz.so`: `adler32_z` always takes its scalar path (was ~50% of all emulation).
    - `libcrypto.so` ×3 (system, vendor, Conscrypt APEX): SHA-NI SHA-256 → scalar SHA-256 (was ~50%).
 
+   **When they are bound.** `usb/early_patch.sh` (sourced from `gbos.cfg`) wraps `chroot` in stage0 and binds the
+   system/vendor `libz` + `libcrypto` just before the first `dmctl` call. Without it, every `dmctl` process
+   (one per partition) loads libcrypto and runs BoringSSL's load-time module hash through SHA-NI, about 3.7M
+   emulated instructions, ~2 s of boot, before `hook.sh` could bind anything. `hook.sh` still does the same binds
+   later as a fail-safe and logs `already patched (early_patch.sh)` when the early pass got there first. Both
+   are gated on the sha256 of the exact original, so a new Google build silently disables them
+   (`NOT patched` in `stage0-dmesg.txt`).
+   *To verify on hardware:* `stage0-dmesg.txt` must show `early: patched system libcrypto` before
+   `running gbos/hook.sh`.
+   *Shipping:* `early_patch.sh` is in `install.sh`'s `FILES` (so **1 Update** copies it to the NVMe) and in the
+   image builder. The `gbos.cfg` source line is guarded by `[ -f ... ]`, so a stick without the file still boots.
+
 **Google hardware the laptop doesn't have**, mostly the GSC security chip and the pKVM Trusty VM:
 `hook.sh` hides or replaces each service that would otherwise hang the boot:
 
