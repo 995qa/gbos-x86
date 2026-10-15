@@ -87,3 +87,9 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   info, tinymix and dras logcat. Suspects: dras card-name match ("HDA Intel PCH"), mixer control names,
   or the DSP still claiming the controller.
 - The stick still has MODE=install; booting with it plugged in starts the installer (it asks for the serial).
+- Bluetooth: our config had BT_HCIBTUSB unset (Google's chip is PCIe). Built btusb/btintel/btrtl as modules
+  (usb/kmod, loaded by hook.sh) + linux-firmware intel/ibt-17-16-1.sfi/.ddc in gbos/firmware/intel. Untested.
+- install.sh: if an install exists, it asks 1) update (keep data, save NVMe logs to stick) / 2) reinstall.
+  A full reinstall first saves the old install's logs to the stick. ACTION=update|install in gbos.cfg skips
+  the question. A stick left in MODE=install once reinstalled over the user's working system (they aborted
+  it midway, NVMe corrupt -> full reinstall); Play-install-stuck-at-100% logs were lost with it.

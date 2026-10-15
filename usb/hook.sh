@@ -17,6 +17,17 @@ if [ -f $G/firmware/iwlwifi-9000-pu-b0-jf-b0-46.ucode ]; then
   echo -n /postinstall/gbos/firmware > $FWP
 fi
 
+# Bluetooth: the 9560's Bluetooth is a USB device (8087:0aaa) and needs btusb, which Google's kernel
+# (PCIe Bluetooth) doesn't build. gbos/kmod/ has btusb/btintel/btrtl from our tree; bluetooth and btbcm
+# are in the initramfs. Firmware (intel/ibt-17-16-1.sfi/.ddc) loads when Android powers Bluetooth on,
+# from /postinstall/gbos/firmware.
+if [ -f $G/kmod/btusb.ko ]; then
+  modprobe bluetooth && modprobe btbcm && insmod $G/kmod/btintel.ko && insmod $G/kmod/btrtl.ko \
+    && insmod $G/kmod/btusb.ko && log "hook: btusb loaded ($(ls /sys/class/bluetooth 2>/dev/null | tr '\n' ' '))" \
+    || log "hook: btusb load FAILED: $(dmesg | grep -iE 'btusb|btintel|bluetooth' | tail -2 | tr '\n' ' ')"
+  [ -f $G/firmware/intel/ibt-17-16-1.sfi ] || log "hook: Bluetooth firmware intel/ibt-17-16-1.sfi missing"
+fi
+
 # Fake ChromeOS boot disk for the boot HAL: misc + vbmeta_a/vbmeta_b with cgpt slot attributes.
 if [ -f $G/bootdisk.img ]; then
   losetup -P /dev/loop6 $G/bootdisk.img; sleep 1; mdev -s

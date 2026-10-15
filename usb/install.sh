@@ -16,6 +16,7 @@ say() { echo "$*" > $TTY; echo "$*" >> $L/install.log; log "install: $*"; }
 halt_here() { say ""; say "$1"; say "Power off with the power button."; sync; while true; do sleep 3600; done; }
 die() { halt_here "INSTALL FAILED: $*  (log: gbos/logs/boot-$N/install.log on the stick)"; }
 ask() { printf '%s' "$1" > $TTY; read -r REPLY < $TTY; echo "$1$REPLY" >> $L/install.log; }
+check() { a=$(sha256sum "$1" | cut -d' ' -f1); b=$(sha256sum "$2" | cut -d' ' -f1); [ "$a" = "$b" ] || die "verify failed: $2"; echo "ok $a $2" >> $L/install.log; }
 
 chvt 1 2>/dev/null
 clear > $TTY 2>/dev/null
@@ -30,11 +31,50 @@ mkdir -p /mnt/stickefi && mount -t vfat -o ro $EFIPART /mnt/stickefi 2>/dev/null
   || die "cannot mount the stick's EFI partition ($EFIPART)"
 KERNEL=/mnt/stickefi/EFI/BOOT/BOOTX64.EFI
 FILES="super.img super.layout hook.sh crossystem bootdisk.img libkm_compat.so system_ext_manifest.xml soft_gk"
-DIRS="firmware patched audio installer"
+DIRS="firmware patched audio installer kmod"
 for f in $FILES; do [ -f $G/$f ] || die "missing gbos/$f on the stick"; done
 for d in $DIRS; do [ -d $G/$d ] || die "missing gbos/$d/ on the stick"; done
 [ -f $KERNEL ] || die "missing EFI/BOOT/BOOTX64.EFI on the stick's EFI partition"
 tool sfdisk --version > /dev/null 2>&1 || die "partitioning tools in gbos/installer/ don't run"
+
+# ACTION=update in gbos.cfg: don't erase anything. Save the installed system's last 3 boots of logs
+# to this boot's log dir on the stick, then bring its gbos/ files and kernel up to the stick's.
+# GBOS_DATA and GBOS_META (apps, accounts, settings) are not touched.
+NSYS=$(findfs LABEL=GBOSSYS 2>/dev/null); NEFI=$(findfs LABEL=GBOS_EFI 2>/dev/null); NDATA=$(findfs LABEL=GBOS_DATA 2>/dev/null)
+if [ -z "$ACTION" ] && [ -n "$NSYS" ] && [ -n "$NEFI" ] && [ -n "$NDATA" ]; then
+  # An install exists: never erase it just because the stick was left in. Ask.
+  say "Found an existing gbos install on the NVMe."
+  say "  1) Update it: keep apps, accounts and settings; save its logs to this stick"
+  say "  2) Reinstall: ERASE the NVMe and install from scratch"
+  say "  anything else: cancel"
+  ask "choice> "
+  case "$REPLY" in 1) ACTION=update;; 2) ACTION=install;; *) halt_here "Cancelled. Nothing was written.";; esac
+fi
+if [ "${ACTION:-install}" = update ]; then
+  NSYS=$(findfs LABEL=GBOSSYS 2>/dev/null); NEFI=$(findfs LABEL=GBOS_EFI 2>/dev/null)
+  [ -n "$NSYS" ] && [ -n "$NEFI" ] || die "no gbos install on the NVMe (GBOSSYS/GBOS_EFI not found)"
+  mkdir -p /mnt/nsys /mnt/nefi
+  mount -t vfat -o flush $NSYS /mnt/nsys || die "mount GBOSSYS failed"
+  mount -t vfat $NEFI /mnt/nefi || die "mount GBOS_EFI failed"
+  say "Saving the installed system's logs to the stick (gbos/logs/boot-$N/nvme-logs) ..."
+  mkdir -p $L/nvme-logs
+  for b in $(ls /mnt/nsys/gbos/logs | sort -t- -k2 -n | tail -3); do cp -r /mnt/nsys/gbos/logs/$b $L/nvme-logs/; done
+  say "Updating the installed system (data is not touched) ..."
+  for f in $FILES; do cmp -s $G/$f /mnt/nsys/gbos/$f || { say "  $f"; cp $G/$f /mnt/nsys/gbos/$f || die "copy $f failed"; }; done
+  for d in $DIRS; do rm -rf /mnt/nsys/gbos/$d; cp -r $G/$d /mnt/nsys/gbos/ || die "copy $d/ failed"; done
+  cmp -s $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI || { say "  kernel"; cp $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI || die "copy kernel failed"; }
+  sync; echo 3 > /proc/sys/vm/drop_caches
+  say "Verifying ..."
+  check $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI
+  for f in $FILES; do check $G/$f /mnt/nsys/gbos/$f; done
+  for d in $DIRS; do (cd $G && find $d -type f) | while read f; do check $G/$f /mnt/nsys/gbos/$f; done || exit 1; done || die "verify failed"
+  umount /mnt/nefi /mnt/nsys /mnt/stickefi; sync
+  say ""
+  say "Update done. Remove the USB stick and turn the laptop back on."
+  log "install: update complete"; sync
+  ask "Press Enter to power off. "
+  poweroff -f
+fi
 
 # Target: an internal NVMe namespace, never the stick.
 set -- $(ls /sys/block | grep '^nvme[0-9]*n[0-9]*$')
@@ -64,6 +104,14 @@ else
   ask "serial> "
 fi
 [ "$REPLY" = "$SERIAL" ] || halt_here "Cancelled. Nothing was written to $TD."
+
+# Keep the old install's recent logs (best effort) before they're erased.
+if [ -n "$NSYS" ] && mkdir -p /mnt/oldsys && mount -t vfat -o ro $NSYS /mnt/oldsys 2>/dev/null; then
+  mkdir -p $L/nvme-logs
+  for b in $(ls /mnt/oldsys/gbos/logs 2>/dev/null | sort -t- -k2 -n | tail -3); do cp -r /mnt/oldsys/gbos/logs/$b $L/nvme-logs/ 2>/dev/null; done
+  say "Saved the old install's logs to gbos/logs/boot-$N/nvme-logs on the stick."
+  umount /mnt/oldsys
+fi
 
 say ""
 say "Erasing and partitioning $TD ..."
@@ -108,7 +156,6 @@ grep -v '^MODE=' $G/gbos.cfg > /mnt/nsys/gbos/gbos.cfg; echo 'MODE=boot' >> /mnt
 sync; echo 3 > /proc/sys/vm/drop_caches
 
 say "Verifying ..."
-check() { a=$(sha256sum "$1" | cut -d' ' -f1); b=$(sha256sum "$2" | cut -d' ' -f1); [ "$a" = "$b" ] || die "verify failed: $2"; echo "ok $a $2" >> $L/install.log; }
 check $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI
 for f in $FILES; do check $G/$f /mnt/nsys/gbos/$f; done
 for d in $DIRS; do (cd $G && find $d -type f) | while read f; do check $G/$f /mnt/nsys/gbos/$f; done || exit 1; done || die "verify failed"
