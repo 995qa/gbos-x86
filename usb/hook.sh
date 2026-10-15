@@ -124,6 +124,15 @@ on post-fs-data
     start gbos_sync
     start gbos_crashlog
 RC
+  # Conscrypt (and identical) APEX libcrypto: the APEX is signed, so patch a copy and bind it over the
+  # original once apexd has activated every APEX (init.rc's "wait_for_prop apexd.status activated" is in
+  # on post-fs-data, before zygote-start). See apex_patch.sh.
+  if [ -f $G/apex_patch.sh ] && [ "$(grep -c '^    wait_for_prop apexd.status activated$' /tmp/sysinit/hw/init.rc)" = 1 ]; then
+    sed -i 's#^    wait_for_prop apexd.status activated$#&\n    exec u:r:shell:s0 root root -- /system/bin/sh /postinstall/gbos/apex_patch.sh#' /tmp/sysinit/hw/init.rc \
+      && log "hook: init.rc runs apex_patch.sh after APEX activation"
+  else
+    log "hook: apex_patch NOT installed (script missing or init.rc anchor not unique)"
+  fi
   mount -t tmpfs -o mode=0755 tmpfs /new/system/etc/init && cp -a /tmp/sysinit/. /new/system/etc/init/ \
     && log "hook: logcat -> gbos/logs/boot-$N/logcat.txt ($(ls /new/system/etc/init | wc -l) rc files)" \
     || log "hook: init overlay FAILED"
@@ -220,5 +229,16 @@ for p in system:/new/system/lib64/libz.so:371f70d6a9392327cb36838d0cbc7af7388d16
     mount --bind $G/patched/$n.libz.so $t && log "hook: patched $n libz (scalar adler32) active"
   else
     log "hook: $n libz NOT patched (missing patch or unexpected original)"
+  fi
+done
+
+# libcrypto: SHA-NI block functions trap here; the patched copies (tools/sha_redirect.py) send them to the
+# scalar siblings. Hash-gated like libz.
+for p in system:/new/system/lib64/libcrypto.so:0ee96c7e0cb1ffca5520d2eaca02b4fa2ccff5a8fcb753a491e85555a91c9f2a vendor:/new/vendor/lib64/libcrypto.so:70cc371baf9925d5f1f857d03177d5193caf60bb13bb2012b4336657adcf48e7; do
+  n=${p%%:*}; r=${p#*:}; t=${r%%:*}; h=${r#*:}
+  if [ -f $G/patched/$n.libcrypto.so ] && [ "$(sha256sum $t | cut -d' ' -f1)" = "$h" ]; then
+    mount --bind $G/patched/$n.libcrypto.so $t && log "hook: patched $n libcrypto (scalar SHA) active"
+  else
+    log "hook: $n libcrypto NOT patched (missing patch or unexpected original)"
   fi
 done
