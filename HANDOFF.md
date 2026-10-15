@@ -118,3 +118,4 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
 - User wanted stock density back (believes it caused the paleness). DENSITY now optional (unset = stock 260); new RESOLUTION=2400x1350 -> 'wm size' at boot_completed (gbos_wmsize) scales the UI without changing density.
 - User reverted to DENSITY=180, RESOLUTION empty (native).
 - hook: vendor build.prop now sets ro.surface_flinger.has_wide_color_display=false and has_HDR_display=false (were true), so SF offers only sRGB and the HWC has no reason to tag eDP BT.2020. Complements kernel #23.
+- User reports #23 + sRGB-only props did not fix the paleness. Kernel #25 (i915_edp_no_colorspace.sh): no Colorspace property on eDP at all. 16/16 QEMU. On the stick in TEST mode (MODE=boot, BOOT_FROM=stick: stick's own system, tmpfs data); NVMe still has #23. #23 kept as usb/out/BOOTX64.EFI.prev-23. Note: no logs yet confirm #23/sRGB were active on the boot the user judged.

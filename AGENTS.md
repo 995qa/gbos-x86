@@ -39,7 +39,7 @@ Read `README.md` (what/how) and `HANDOFF.md` (chronological log of every bug and
 
 ## Where things run
 - Kernel builds: docker volume `gbos-ksrc` (`/build/src`, `/build/out`), image `gbos-kbuild`,
-  `kernel/isa_emu_patch/build.sh`. Modules for kernel #23 must come from the same tree.
+  `kernel/isa_emu_patch/build.sh`. Modules for kernel #25 must come from the same tree.
 - Emulator test: `kernel/isa_emu_test/run_qemu.py <bzImage>` must print `ISA_EMU_TEST_PASS`.
 - Shell syntax checks: `sh -n usb/hook.sh usb/install.sh usb/stage0_init.sh usb/apex_patch.sh`.
 
