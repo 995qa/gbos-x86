@@ -115,3 +115,4 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   with BT.2020 colorimetry and the panel gamut-mapped it (pale). kernel/isa_emu_patch/i915_edp_colorspace.sh:
   eDP always uses default colorimetry (property kept). Kernel #23 (16/16 QEMU), on the stick; #20 kept as
   usb/out/BOOTX64.EFI.prev-20.
+- User wanted stock density back (believes it caused the paleness). DENSITY now optional (unset = stock 260); new RESOLUTION=2400x1350 -> 'wm size' at boot_completed (gbos_wmsize) scales the UI without changing density.

@@ -68,7 +68,7 @@ UEFI firmware
 | Linux Terminal never starts its VM | Trusty Secretkeeper never answers | hide Secretkeeper's VINTF declaration |
 | Logs truncated, stick corrupted | vold `fsck_msdos`'d the stick while mounted | remove vold's `voldmanaged=usb` fstab rule |
 | No sound | Google uses SOF; our kernel has legacy HDA | `usb/audio/` config for the `dras` audio HAL (card id `PCH`) |
-| Everything too big | `ro.sf.lcd_density=260` for Google's panel | `DENSITY` in `gbos.cfg` (default 180) |
+| Everything too big | `ro.sf.lcd_density=260` for Google's panel | `RESOLUTION` in `gbos.cfg` (default 2400x1350, stock density); `DENSITY` optional |
 
 Laptop-specific drivers that Google's vendor modules can't provide (they're built for Google's kernel):
 battery/AC, Intel LPSS I2C (touchpad), legacy HDA audio and `btusb` are built into our kernel
@@ -131,8 +131,10 @@ number), `crash.txt`, `hw.txt`, `audio.txt`, and `pstore-prev/` (the previous bo
 any). FAT has no journal: shut down from Android's power menu, not the power button.
 
 ### Display size
-`DENSITY=180` in `gbos.cfg` (lower = smaller). After changing it, reset Settings → Display → Display size
-to Default, because a forced size overrides it.
+Density stays Google's stock 260. `RESOLUTION=2400x1350` in `gbos.cfg` makes Android render at a larger
+logical size that the display scales to the 1920x1080 panel: bigger = smaller UI (empty = native).
+`DENSITY=` can still override the density but is unset by default. If you changed Settings → Display →
+Display size, reset it to Default.
 
 ## Building from scratch
 

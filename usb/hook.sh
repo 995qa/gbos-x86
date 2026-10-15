@@ -54,6 +54,9 @@ fi
 if mount --bind /gbos /new/postinstall; then
   mkdir -p /tmp/sysinit && cp -a /new/system/etc/init/. /tmp/sysinit/
   rm -f /tmp/sysinit/gscd.rc   # gscd needs Google's security chip (/dev/tpm0); it only crash-loops here
+  # RESOLUTION in gbos.cfg: logical display size (e.g. 2400x1350) that SurfaceFlinger renders at and the
+  # display hardware scales to the 1920x1080 panel, so everything looks smaller with stock density.
+  case "$RESOLUTION" in [0-9]*x[0-9]*) WMSIZE=$RESOLUTION;; *) WMSIZE=reset;; esac
   cat > /tmp/sysinit/gbos.rc <<RC
 # Rotate at 1 MB: on this stick, data written past ~4 MB of a file that stays open never reaches
 # the FAT cluster chain before power-off (fsck: "size ... should at most be 4046848"). Rotating
@@ -83,7 +86,16 @@ service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; ( head -n 3
     oneshot
 on property:sys.boot_completed=1
     start gbos_audiodiag
+    start gbos_wmsize
     start gbos_displaydiag
+
+# Logical display size (RESOLUTION in gbos.cfg); "reset" = native 1920x1080.
+service gbos_wmsize /system/bin/wm size $WMSIZE
+    user root
+    group root
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
 
 # Display diagnostics, 70 s after boot (washed-out colours): DRM atomic state (CTM, gamma, Broadcast RGB,
 # colour pipeline), i915 pipe/dither/bpc info, panel EDID, and SurfaceFlinger/colour-mode settings.
@@ -163,12 +175,16 @@ else
   log "hook: bind /gbos -> /postinstall FAILED"
 fi
 
-# Hide protected_vm.supported=1 (no pKVM here) from vendor/build.prop, and replace the display density:
-# Google's 260 is for the Googlebook's panel; the Latitude 5300's 13.3" 1080p is ~166 dpi, so 260 makes
-# everything too big even at the smallest Display size. DENSITY in gbos.cfg (default 180; lower = smaller).
-case "$DENSITY" in ''|*[!0-9]*) DENSITY=180;; esac
-{ grep -v -e '^ro.boot.hypervisor.protected_vm.supported=' -e '^ro.sf.lcd_density=' /new/vendor/build.prop; echo "ro.sf.lcd_density=$DENSITY"; } > /tmp/vendor.build.prop \
-  && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop && log "hook: vendor build.prop: protected_vm.supported hidden, lcd_density=$DENSITY"
+# Hide protected_vm.supported=1 (no pKVM here) from vendor/build.prop. DENSITY in gbos.cfg optionally
+# replaces ro.sf.lcd_density (stock 260); unset keeps stock. To make things smaller without touching
+# density, use RESOLUTION instead (gbos_wmsize in gbos.rc above).
+case "$DENSITY" in ''|*[!0-9]*) DENSITY=;; esac
+if [ -n "$DENSITY" ]; then
+  { grep -v -e '^ro.boot.hypervisor.protected_vm.supported=' -e '^ro.sf.lcd_density=' /new/vendor/build.prop; echo "ro.sf.lcd_density=$DENSITY"; } > /tmp/vendor.build.prop
+else
+  grep -v -e '^ro.boot.hypervisor.protected_vm.supported=' /new/vendor/build.prop > /tmp/vendor.build.prop
+fi && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop \
+  && log "hook: vendor build.prop: protected_vm.supported hidden, lcd_density=${DENSITY:-stock}"
 # Only one Trusty VM may own CID 200: drop the plain launcher's auto-start so the on-demand
 # (accessor-registering) launcher runs it, falling back to non-protected by itself.
 R=/new/system_ext/etc/init/desktop-trusty_security_vm_launcher.rc
