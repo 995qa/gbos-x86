@@ -175,16 +175,21 @@ else
   log "hook: bind /gbos -> /postinstall FAILED"
 fi
 
-# Hide protected_vm.supported=1 (no pKVM here) from vendor/build.prop. DENSITY in gbos.cfg optionally
-# replaces ro.sf.lcd_density (stock 260); unset keeps stock. To make things smaller without touching
-# density, use RESOLUTION instead (gbos_wmsize in gbos.rc above).
+# vendor/build.prop overrides. Hide protected_vm.supported=1 (no pKVM here). DENSITY in gbos.cfg
+# optionally replaces ro.sf.lcd_density (stock 260); unset keeps stock. To make things smaller without
+# touching density, use RESOLUTION instead (gbos_wmsize in gbos.rc above).
+# The Latitude's LG LP133WF6 is an sRGB panel, not wide-gamut/HDR like Google's: with these true,
+# SurfaceFlinger offers DISPLAY_BT2020 and drm_hwcomposer tags eDP as BT.2020 (pale colours; the
+# kernel side is fixed in i915_edp_colorspace.sh). Declare it sRGB-only.
 case "$DENSITY" in ''|*[!0-9]*) DENSITY=;; esac
-if [ -n "$DENSITY" ]; then
-  { grep -v -e '^ro.boot.hypervisor.protected_vm.supported=' -e '^ro.sf.lcd_density=' /new/vendor/build.prop; echo "ro.sf.lcd_density=$DENSITY"; } > /tmp/vendor.build.prop
-else
-  grep -v -e '^ro.boot.hypervisor.protected_vm.supported=' /new/vendor/build.prop > /tmp/vendor.build.prop
-fi && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop \
-  && log "hook: vendor build.prop: protected_vm.supported hidden, lcd_density=${DENSITY:-stock}"
+DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_color_display=|^ro.surface_flinger.has_HDR_display='
+[ -n "$DENSITY" ] && DROP="$DROP|^ro.sf.lcd_density="
+{ grep -v -E "$DROP" /new/vendor/build.prop
+  echo "ro.surface_flinger.has_wide_color_display=false"
+  echo "ro.surface_flinger.has_HDR_display=false"
+  if [ -n "$DENSITY" ]; then echo "ro.sf.lcd_density=$DENSITY"; fi
+} > /tmp/vendor.build.prop && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop \
+  && log "hook: vendor build.prop: protected_vm.supported hidden, sRGB-only display, lcd_density=${DENSITY:-stock}"
 # Only one Trusty VM may own CID 200: drop the plain launcher's auto-start so the on-demand
 # (accessor-registering) launcher runs it, falling back to non-protected by itself.
 R=/new/system_ext/etc/init/desktop-trusty_security_vm_launcher.rc
