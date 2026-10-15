@@ -1,0 +1,8 @@
+#!/system/bin/sh
+# gbos fake crossystem: this laptop has no ChromeOS firmware. Reports slot A, accepts writes.
+case "$1" in
+  mainfw_act) echo -n A ;;
+  fwid|ro_fwid) echo -n Google_Lapis.gbos.0 ;;
+  *=*) exit 0 ;;
+  *) echo -n 0 ;;
+esac

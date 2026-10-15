@@ -1,0 +1,87 @@
+{
+ "label": "ramdisks",
+ "elf_files": 21,
+ "instructions": 2024509,
+ "timed_out": [],
+ "totals": {
+  "GFNI": 110,
+  "SHA-NI": 56,
+  "AVX-VNNI": 47
+ },
+ "files_per_feature": {
+  "SHA-NI": 1,
+  "GFNI": 6,
+  "AVX-VNNI": 4
+ },
+ "top_files": {
+  "SHA-NI": [
+   [
+    "init_boot/init",
+    56
+   ]
+  ],
+  "GFNI": [
+   [
+    "init_boot/init",
+    40
+   ],
+   [
+    "vendor_boot/first_stage_ramdisk/system/bin/linker64",
+    24
+   ],
+   [
+    "init_boot/system/bin/toolbox_ramdisk",
+    16
+   ],
+   [
+    "init_boot/system/bin/snapuserd_ramdisk",
+    14
+   ],
+   [
+    "vendor_boot/first_stage_ramdisk/system/lib64/libc.so",
+    13
+   ],
+   [
+    "vendor_boot/first_stage_ramdisk/system/lib64/libz.so",
+    3
+   ]
+  ],
+  "AVX-VNNI": [
+   [
+    "vendor_boot/first_stage_ramdisk/system/bin/linker64",
+    16
+   ],
+   [
+    "init_boot/init",
+    12
+   ],
+   [
+    "init_boot/system/bin/snapuserd_ramdisk",
+    10
+   ],
+   [
+    "vendor_boot/first_stage_ramdisk/system/lib64/libz.so",
+    9
+   ]
+  ]
+ },
+ "all_files": {
+  "SHA-NI": [
+   "init_boot/init"
+  ],
+  "GFNI": [
+   "init_boot/init",
+   "init_boot/system/bin/snapuserd_ramdisk",
+   "init_boot/system/bin/toolbox_ramdisk",
+   "vendor_boot/first_stage_ramdisk/system/bin/linker64",
+   "vendor_boot/first_stage_ramdisk/system/lib64/libc.so",
+   "vendor_boot/first_stage_ramdisk/system/lib64/libz.so"
+  ],
+  "AVX-VNNI": [
+   "init_boot/init",
+   "init_boot/system/bin/snapuserd_ramdisk",
+   "vendor_boot/first_stage_ramdisk/system/bin/linker64",
+   "vendor_boot/first_stage_ramdisk/system/lib64/libz.so"
+  ]
+ }
+}

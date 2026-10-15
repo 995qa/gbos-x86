@@ -1,0 +1,440 @@
+{
+ "label": "vendor_a",
+ "elf_files": 613,
+ "instructions": 85333985,
+ "timed_out": [],
+ "totals": {
+  "AVX-512": 107392,
+  "AVX-VNNI": 3295,
+  "GFNI": 2164,
+  "AMX": 822,
+  "ADX": 716,
+  "VAES (256/512-bit)": 272,
+  "SHA-NI": 256,
+  "VPCLMULQDQ (256/512-bit)": 246,
+  "AVX-VNNI-INT8/16": 144,
+  "AVX-NE-CONVERT": 9,
+  "CLFLUSHOPT": 5,
+  "WAITPKG": 2,
+  "AVX-IFMA": 2
+ },
+ "files_per_feature": {
+  "AVX-512": 11,
+  "GFNI": 48,
+  "AVX-VNNI": 20,
+  "AVX-VNNI-INT8/16": 2,
+  "AMX": 2,
+  "CLFLUSHOPT": 3,
+  "VPCLMULQDQ (256/512-bit)": 4,
+  "VAES (256/512-bit)": 2,
+  "SHA-NI": 2,
+  "ADX": 2,
+  "AVX-NE-CONVERT": 1,
+  "WAITPKG": 1,
+  "AVX-IFMA": 2
+ },
+ "top_files": {
+  "AVX-512": [
+   [
+    "lib64/libopenvino_intel_cpu_plugin.so",
+    50587
+   ],
+   [
+    "lib64/libcros_ml_core_internal.so",
+    28327
+   ],
+   [
+    "lib64/libcamera_internal.so",
+    23570
+   ],
+   [
+    "lib64/libgpudataproducer.so",
+    2048
+   ],
+   [
+    "lib64/hw/vulkan.intel.so",
+    2048
+   ],
+   [
+    "lib64/libcrypto.so",
+    527
+   ],
+   [
+    "lib64/libsfplugin_ccodec_utils.so",
+    57
+   ],
+   [
+    "lib64/libcodec2_soft_common.so",
+    57
+   ],
+   [
+    "lib64/libyuv.so",
+    57
+   ],
+   [
+    "lib64/libcamera/pipeline/camera.libipu7_hal_fatcat.so",
+    57
+   ],
+   [
+    "lib64/hw/camera.libcamera_hal_base.so",
+    57
+   ]
+  ],
+  "GFNI": [
+   [
+    "lib64/libcros_ml_core_internal.so",
+    466
+   ],
+   [
+    "lib64/libyuv.so",
+    197
+   ],
+   [
+    "lib64/libsfplugin_ccodec_utils.so",
+    193
+   ],
+   [
+    "lib64/libcodec2_soft_common.so",
+    193
+   ],
+   [
+    "lib64/libcamera/pipeline/camera.libipu7_hal_fatcat.so",
+    193
+   ],
+   [
+    "lib64/hw/camera.libcamera_hal_base.so",
+    193
+   ],
+   [
+    "lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+    137
+   ],
+   [
+    "lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so",
+    84
+   ],
+   [
+    "lib64/libcrypto.so",
+    81
+   ],
+   [
+    "lib64/iHD_drv_video.so",
+    68
+   ],
+   [
+    "lib64/libgpudataproducer.so",
+    67
+   ],
+   [
+    "bin/pps-producer",
+    47
+   ],
+   [
+    "lib64/hw/vulkan.intel.so",
+    44
+   ],
+   [
+    "bin/hw/wpa_supplicant",
+    25
+   ],
+   [
+    "lib64/libcamera_internal.so",
+    24
+   ]
+  ],
+  "AVX-VNNI": [
+   [
+    "lib64/libcros_ml_core_internal.so",
+    2000
+   ],
+   [
+    "lib64/libcamera_internal.so",
+    781
+   ],
+   [
+    "lib64/libopenvino_intel_cpu_plugin.so",
+    160
+   ],
+   [
+    "lib64/libtflite.so",
+    49
+   ],
+   [
+    "lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+    38
+   ],
+   [
+    "lib64/libcodec2_soft_common.so",
+    33
+   ],
+   [
+    "lib64/libsfplugin_ccodec_utils.so",
+    32
+   ],
+   [
+    "lib64/libyuv.so",
+    32
+   ],
+   [
+    "lib64/libcamera/pipeline/camera.libipu7_hal_fatcat.so",
+    32
+   ],
+   [
+    "lib64/hw/camera.libcamera_hal_base.so",
+    32
+   ],
+   [
+    "lib64/libcrypto.so",
+    28
+   ],
+   [
+    "lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so",
+    24
+   ],
+   [
+    "lib64/libbluetooth_audio_session_aidl.so",
+    13
+   ],
+   [
+    "lib64/pixelatoms-cpp.so",
+    10
+   ],
+   [
+    "lib64/libflashrom.so",
+    10
+   ]
+  ],
+  "AVX-VNNI-INT8/16": [
+   [
+    "lib64/libcamera_internal.so",
+    72
+   ],
+   [
+    "lib64/libcros_ml_core_internal.so",
+    72
+   ]
+  ],
+  "AMX": [
+   [
+    "lib64/libcros_ml_core_internal.so",
+    417
+   ],
+   [
+    "lib64/libcamera_internal.so",
+    405
+   ]
+  ],
+  "CLFLUSHOPT": [
+   [
+    "lib64/libgbm.so",
+    2
+   ],
+   [
+    "lib64/libminigbm_gralloc.so",
+    2
+   ],
+   [
+    "lib64/hw/vulkan.intel.so",
+    1
+   ]
+  ],
+  "VPCLMULQDQ (256/512-bit)": [
+   [
+    "lib64/libcros_ml_core_internal.so",
+    120
+   ],
+   [
+    "lib64/libcrypto.so",
+    114
+   ],
+   [
+    "lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so",
+    6
+   ],
+   [
+    "lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+    6
+   ]
+  ],
+  "VAES (256/512-bit)": [
+   [
+    "lib64/libcrypto.so",
+    136
+   ],
+   [
+    "lib64/libcros_ml_core_internal.so",
+    136
+   ]
+  ],
+  "SHA-NI": [
+   [
+    "lib64/libcrypto.so",
+    128
+   ],
+   [
+    "lib64/libcros_ml_core_internal.so",
+    128
+   ]
+  ],
+  "ADX": [
+   [
+    "lib64/libcrypto.so",
+    358
+   ],
+   [
+    "lib64/libcros_ml_core_internal.so",
+    358
+   ]
+  ],
+  "AVX-NE-CONVERT": [
+   [
+    "lib64/libcros_ml_core_internal.so",
+    9
+   ]
+  ],
+  "WAITPKG": [
+   [
+    "lib64/libze_intel_npu.so",
+    2
+   ]
+  ],
+  "AVX-IFMA": [
+   [
+    "bin/ectool",
+    1
+   ],
+   [
+    "bin/hw/android.hardware.usb-service.desktop",
+    1
+   ]
+  ]
+ },
+ "all_files": {
+  "AVX-512": [
+   "lib64/hw/camera.libcamera_hal_base.so",
+   "lib64/hw/vulkan.intel.so",
+   "lib64/libcamera/pipeline/camera.libipu7_hal_fatcat.so",
+   "lib64/libcamera_internal.so",
+   "lib64/libcodec2_soft_common.so",
+   "lib64/libcros_ml_core_internal.so",
+   "lib64/libcrypto.so",
+   "lib64/libgpudataproducer.so",
+   "lib64/libopenvino_intel_cpu_plugin.so",
+   "lib64/libsfplugin_ccodec_utils.so",
+   "lib64/libyuv.so"
+  ],
+  "GFNI": [
+   "bin/adb-usb-bridge",
+   "bin/aubinator_error_decode",
+   "bin/cbfstool",
+   "bin/desktop_init_dev_config",
+   "bin/di-edid-decode",
+   "bin/ectool",
+   "bin/hw/android.hardware.composer.hwc3-service.drm",
+   "bin/hw/android.hardware.media.c2-cros-codecs-service",
+   "bin/hw/android.hardware.power.stats-service.desktop",
+   "bin/hw/android.hardware.security.keymint-service.trusty_tee.nonsecure",
+   "bin/hw/android.hardware.security.secretkeeper.trusty",
+   "bin/hw/android.hardware.usb-service.desktop",
+   "bin/hw/android.hardware.wifi-service",
+   "bin/hw/hostapd",
+   "bin/hw/vendor.google.desktop.keyboard_proxy_service",
+   "bin/hw/wpa_supplicant",
+   "bin/init_provisioned_config",
+   "bin/pps-producer",
+   "bin/rkp_factory_extraction_tool64",
+   "bin/toolbox",
+   "bin/typec_connector_class",
+   "lib64/hw/camera.libcamera_hal_base.so",
+   "lib64/hw/vulkan.intel.so",
+   "lib64/iHD_drv_video.so",
+   "lib64/libaconfig_storage_read_api_cc.so",
+   "lib64/libbluetooth_audio_session_aidl.so",
+   "lib64/libcamera/pipeline/camera.libipu7_hal_fatcat.so",
+   "lib64/libcamera_internal.so",
+   "lib64/libclvk.so",
+   "lib64/libcodec2_soft_common.so",
+   "lib64/libcros_ml_core_internal.so",
+   "lib64/libcrypto.so",
+   "lib64/libflashrom.so",
+   "lib64/libgpudataproducer.so",
+   "lib64/libhalconfig_cxx.so",
+   "lib64/libjpeg.so",
+   "lib64/libpng.so",
+   "lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+   "lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so",
+   "lib64/libsfplugin_ccodec_utils.so",
+   "lib64/libssl.so",
+   "lib64/libtflite.so",
+   "lib64/libyuv.so",
+   "lib64/libz.so",
+   "lib64/pixelatoms-cpp.so",
+   "lib64/soundfx/libaudiopreprocessing.so",
+   "lib64/soundfx/libpreprocessingaidl.so",
+   "lib64/soundfx/libreverbwrapper.so"
+  ],
+  "AVX-VNNI": [
+   "bin/hw/android.hardware.media.c2-cros-codecs-service",
+   "lib64/hw/camera.libcamera_hal_base.so",
+   "lib64/hw/vulkan.intel.so",
+   "lib64/libbluetooth_audio_session_aidl.so",
+   "lib64/libcamera/pipeline/camera.libipu7_hal_fatcat.so",
+   "lib64/libcamera_internal.so",
+   "lib64/libcodec2_soft_common.so",
+   "lib64/libcros_ml_core_internal.so",
+   "lib64/libcrypto.so",
+   "lib64/libflashrom.so",
+   "lib64/libopenvino_intel_cpu_plugin.so",
+   "lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+   "lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so",
+   "lib64/libsfplugin_ccodec_utils.so",
+   "lib64/libtflite.so",
+   "lib64/libyuv.so",
+   "lib64/libz.so",
+   "lib64/pixelatoms-cpp.so",
+   "lib64/soundfx/libaudiopreprocessing.so",
+   "lib64/soundfx/libpreprocessingaidl.so"
+  ],
+  "AVX-VNNI-INT8/16": [
+   "lib64/libcamera_internal.so",
+   "lib64/libcros_ml_core_internal.so"
+  ],
+  "AMX": [
+   "lib64/libcamera_internal.so",
+   "lib64/libcros_ml_core_internal.so"
+  ],
+  "CLFLUSHOPT": [
+   "lib64/hw/vulkan.intel.so",
+   "lib64/libgbm.so",
+   "lib64/libminigbm_gralloc.so"
+  ],
+  "VPCLMULQDQ (256/512-bit)": [
+   "lib64/libcros_ml_core_internal.so",
+   "lib64/libcrypto.so",
+   "lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+   "lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so"
+  ],
+  "VAES (256/512-bit)": [
+   "lib64/libcros_ml_core_internal.so",
+   "lib64/libcrypto.so"
+  ],
+  "SHA-NI": [
+   "lib64/libcros_ml_core_internal.so",
+   "lib64/libcrypto.so"
+  ],
+  "ADX": [
+   "lib64/libcros_ml_core_internal.so",
+   "lib64/libcrypto.so"
+  ],
+  "AVX-NE-CONVERT": [
+   "lib64/libcros_ml_core_internal.so"
+  ],
+  "WAITPKG": [
+   "lib64/libze_intel_npu.so"
+  ],
+  "AVX-IFMA": [
+   "bin/ectool",
+   "bin/hw/android.hardware.usb-service.desktop"
+  ]
+ }
+}

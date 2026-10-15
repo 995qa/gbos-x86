@@ -1,0 +1,32 @@
+# Separate repository
+/gbrunch/
+
+# Google images, extracted trees and patched copies (GBs, not ours to redistribute)
+/lapis/parts/
+/lapis/probe/
+/lapis/apex/
+/lapis/patched/
+*.img
+*.cpio
+*.apex
+
+# Build output
+/kernel/out/
+/kernel/out_isa/
+/usb/out/
+/usb/modroot/
+/gatekeeper/soft_gk
+/usb/soft_gk
+*.o
+*.so
+__pycache__/
+
+# Firmware and patched Google libraries staged for the stick
+/gatekeeper/libs/
+/usb/patched/
+/usb/firmware/
+
+# Logs and run markers
+*.log
+*.done
+/kernel/isa_emu_test/t

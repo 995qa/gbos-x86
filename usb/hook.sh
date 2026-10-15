@@ -1,0 +1,203 @@
+# gbos pre-Android hook: sourced by stage0 just before switch_root (Android root at /new,
+# helpers log/fail/shell and $G=/gbos/gbos available). Edit freely, no kernel rebuild needed.
+
+# zram is a module here (=m in Google's config too); mmd_setup aborts without /sys/block/zram0.
+modprobe zram && log "hook: zram loaded" || log "hook: modprobe zram FAILED"
+
+# Wi-Fi: CNVi 9560/9462 (8086:9df0) needs iwlwifi-9000-pu-b0-jf-b0-46.ucode (linux-firmware), which
+# Google's vendor image doesn't carry. Point the firmware loader at the stick, load the driver, and
+# wait for the firmware so it isn't requested after switch_root (where /gbos no longer exists).
+# Afterwards point it at the same folder as seen from Android (/postinstall = the stick).
+FWP=/sys/module/firmware_class/parameters/path
+if [ -f $G/firmware/iwlwifi-9000-pu-b0-jf-b0-46.ucode ]; then
+  echo -n $G/firmware > $FWP
+  modprobe iwlmvm && log "hook: iwlmvm loaded" || log "hook: modprobe iwlmvm FAILED"
+  i=0; while [ $i -lt 15 ] && ! dmesg | grep -q 'iwlwifi.*loaded firmware version'; do sleep 1; i=$((i+1)); done
+  log "hook: wifi after ${i}s: $(dmesg | grep -m1 -o 'iwlwifi.*loaded firmware version.*') ifaces: $(ls /sys/class/net | tr '\n' ' ')"
+  echo -n /postinstall/gbos/firmware > $FWP
+fi
+
+# Fake ChromeOS boot disk for the boot HAL: misc + vbmeta_a/vbmeta_b with cgpt slot attributes.
+if [ -f $G/bootdisk.img ]; then
+  losetup -P /dev/loop6 $G/bootdisk.img; sleep 1; mdev -s
+  mknod -m 600 /dev/block/loop6 b 7 6 2>/dev/null
+  i=1
+  for n in misc vbmeta_a vbmeta_b; do
+    [ -e /dev/block/loop6p$i ] || mknod -m 600 /dev/block/loop6p$i b $(tr : ' ' < /sys/class/block/loop6p$i/dev)
+    ln -sf /dev/block/loop6p$i /dev/block/by-name/$n
+    i=$((i+1))
+  done
+  log "hook: bootdisk on loop6: $(ls /sys/class/block | grep loop6p | tr '\n' ' ')"
+fi
+
+# Fake crossystem (no ChromeOS firmware on this laptop)
+[ -f $G/crossystem ] && mount --bind $G/crossystem /new/vendor/bin/crossystem && log "hook: crossystem faked"
+
+# Logcat to the stick: expose the USB volume inside Android at /postinstall, and overlay
+# /system/etc/init with a copy plus gbos.rc (a logcat service writing to this boot's log dir).
+if mount --bind /gbos /new/postinstall; then
+  mkdir -p /tmp/sysinit && cp -a /new/system/etc/init/. /tmp/sysinit/
+  rm -f /tmp/sysinit/gscd.rc   # gscd needs Google's security chip (/dev/tpm0); it only crash-loops here
+  cat > /tmp/sysinit/gbos.rc <<RC
+# Rotate at 1 MB: on this stick, data written past ~4 MB of a file that stays open never reaches
+# the FAT cluster chain before power-off (fsck: "size ... should at most be 4046848"). Rotating
+# closes each file; logcat.txt is newest, then logcat.txt.1, .2, ...
+service gbos_logcat /system/bin/logcat -b all -v threadtime -r 1024 -n 99 -f /postinstall/gbos/logs/boot-$N/logcat.txt
+    user root
+    group root log
+    seclabel u:r:shell:s0
+
+# Crash buffer only (FATAL EXCEPTION / native crashes): small, so it survives a hard power-off.
+service gbos_crashlog /system/bin/logcat -b crash -v threadtime -f /postinstall/gbos/logs/boot-$N/crash.txt
+    user root
+    group root log
+    seclabel u:r:shell:s0
+
+# The laptop is usually powered off by hand, so flush the logs to the stick every 5 s.
+service gbos_sync /system/bin/sh -c "while true; do sleep 5; sync; done"
+    user root
+    group root
+    seclabel u:r:shell:s0
+
+# Software Gatekeeper (gatekeeper/soft_gk.c) in place of the Trusty one, which never answers.
+service gbos_soft_gk /postinstall/gbos/soft_gk
+    class hal
+    user system
+    group system
+    seclabel u:r:hal_gatekeeper_default:s0
+    interface aidl android.hardware.gatekeeper.IGatekeeper/default
+
+# Trusty security VM (KeyMint/Gatekeeper TEE) as a plain KVM VM: no pKVM on this laptop.
+# vendor/build.prop's protected_vm.supported=1 is hidden (see below), so the launcher falls back
+# to a non-protected VM; servicemanager starts it on demand for the KeyMint accessors.
+on early-init
+    setprop ro.boot.hypervisor.vm.supported 1
+    # libcutils only uses memfd for apps targeting SDK >= 37; older ones (SetupWizard) go to
+    # /dev/ashmem, which needs the Rust ashmem driver. Force memfd (kernel/ashmem_shim answers
+    # the ashmem ioctls on memfd).
+    setprop sys.use_memfd true
+on init && property:trusty.security_vm.enabled=1
+    setprop desktop.security_vm.vm_image /system_ext/etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf
+    setprop trusty.security_vm.vm_cid 200
+    setprop trusty.security_vm.nonsecure_vm_ready 1
+    setprop ro.hardware.trusty_ipc_dev.gatekeeper VSOCK:200:0
+    setprop storageproxyd_system.trusty_ipc_dev VSOCK:200:0
+
+# atrace.rc resets ftrace at late-init; turn the KVM trace back on before the Trusty VM starts.
+on early-fs
+    write /sys/kernel/tracing/buffer_size_kb 8192
+    write /sys/kernel/tracing/events/kvm/kvm_inj_exception/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_emulate_insn/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_userspace_exit/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_exit/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_pio/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_mmio/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_hypercall/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_fast_mmio/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_inj_virq/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_pic_set_irq/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_ioapic_set_irq/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_msi_set_irq/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_set_irq/enable 1
+    write /sys/kernel/tracing/events/kvm/kvm_apic_accept_irq/enable 1
+    # Boot the Trusty VM before any KeyMint/StrongBox client connects (vsock startup race).
+    start trusty_security_protected_vm_launcher
+    write /sys/kernel/tracing/tracing_on 1
+
+on post-fs
+    start gbos_logcat
+    start gbos_sync
+    start gbos_crashlog
+on post-fs-data
+    start gbos_logcat
+    start gbos_sync
+    start gbos_crashlog
+RC
+  mount -t tmpfs -o mode=0755 tmpfs /new/system/etc/init && cp -a /tmp/sysinit/. /new/system/etc/init/ \
+    && log "hook: logcat -> gbos/logs/boot-$N/logcat.txt ($(ls /new/system/etc/init | wc -l) rc files)" \
+    || log "hook: init overlay FAILED"
+else
+  log "hook: bind /gbos -> /postinstall FAILED"
+fi
+
+# Hide protected_vm.supported=1 (no pKVM here) from vendor/build.prop
+grep -v '^ro.boot.hypervisor.protected_vm.supported=' /new/vendor/build.prop > /tmp/vendor.build.prop \
+  && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop && log "hook: vendor build.prop: protected_vm.supported hidden"
+# Only one Trusty VM may own CID 200: drop the plain launcher's auto-start so the on-demand
+# (accessor-registering) launcher runs it, falling back to non-protected by itself.
+R=/new/system_ext/etc/init/desktop-trusty_security_vm_launcher.rc
+sed 's/^    start trusty_security_vm_launcher$/    # gbos: plain launcher disabled/' $R > /tmp/vm_launcher.rc \
+  && mount --bind /tmp/vm_launcher.rc $R \
+  && log "hook: plain trusty launcher disabled ($(grep -c 'gbos: plain launcher disabled' $R) triggers)"
+# Software KeyMint: Trusty's TEE KeyMint needs Google's security chip for its root of trust and
+# hangs without it. Hide the Trusty KeyMint/RKP/SecureClock declarations so keystore2 uses
+# km_compat, and use a libkm_compat patched to serve its software KeyMint for every security level.
+KM=/new/system/lib64/libkm_compat.so
+if [ -f $G/libkm_compat.so ] && [ "$(sha256sum $KM | cut -d' ' -f1)" = "be92d0a47d07a4a928ad1395f470195870dfdd16825866b7eaf3dd670d9b2461" ]; then
+  mount --bind $G/libkm_compat.so $KM && log "hook: software KeyMint (patched libkm_compat) active"
+else
+  log "hook: libkm_compat NOT patched (missing patch or unexpected original)"
+fi
+[ -f $G/system_ext_manifest.xml ] && mount --bind $G/system_ext_manifest.xml /new/system_ext/etc/vintf/manifest.xml \
+  && log "hook: Trusty KeyMint VINTF declarations hidden"
+# StrongBox KeyMint (vendor APEX) needs the security chip too, and keystore2 aborts boot when a
+# declared KeyMint won't accept module info. Overlay /vendor/apex without that one APEX.
+mkdir -p /tmp/vapex && mount --bind /new/vendor/apex /tmp/vapex \
+  && mount -t tmpfs -o mode=0755 tmpfs /new/vendor/apex && for f in /tmp/vapex/*; do
+    n=${f##*/}; case $n in com.android.hardware.keymint.strongbox.desktop.apex) continue;; esac
+    touch /new/vendor/apex/$n && mount --bind $f /new/vendor/apex/$n
+  done && log "hook: vendor apex without strongbox: $(ls /new/vendor/apex | tr '\n' ' ')"
+# Weaver is Trusty/GSC-backed and only starts with protected_vm.supported=1 (hidden above), but
+# its VINTF declaration stays, so LockSettingsService waits on it forever and the Watchdog kills
+# system_server ("System process not responding"). Undeclared, LSS goes without Weaver.
+W=/new/vendor/etc/vintf/manifest/android.hardware.weaver-service.android-desktop.xml
+[ -f $W ] && echo '<manifest version="9.0" type="device"/>' > /tmp/weaver.xml \
+  && mount --bind /tmp/weaver.xml $W && log "hook: Weaver VINTF declaration hidden"
+# Gatekeeper is Trusty-backed (VSOCK:200) and enroll never returns, so setting a lock-screen
+# password hangs LockSettingsService (and every Settings screen waiting on it). Keep the VINTF
+# declaration but don't start the Trusty service: gbos_soft_gk (gbos.rc above) registers
+# IGatekeeper/default instead. Without soft_gk on the stick, hide the declaration so enroll fails fast.
+GK=/new/vendor/etc/vintf/manifest/android.hardware.gatekeeper-service.trusty.xml
+: > /tmp/empty.rc && mount --bind /tmp/empty.rc /new/vendor/etc/init/android.hardware.gatekeeper-service.trusty.rc
+if [ -x $G/soft_gk ]; then
+  log "hook: Trusty Gatekeeper replaced by software Gatekeeper (soft_gk)"
+else
+  echo '<manifest version="9.0" type="device"/>' > /tmp/gatekeeper.xml && mount --bind /tmp/gatekeeper.xml $GK \
+    && log "hook: Trusty Gatekeeper hidden, no soft_gk (no lock-screen password)"
+fi
+# Keep vold off USB disks: its voldmanaged=usb rule picks up this stick, and its fsck_msdos
+# "repairs" the FAT while stage0 has it mounted (LOST.DIR, lost/truncated logs, cross-linked
+# clusters). The stick must only ever be mounted by stage0.
+F=/new/vendor/etc/fstab.android-desktop
+grep -v 'voldmanaged=usb' $F > /tmp/fstab.android-desktop \
+  && mount --bind /tmp/fstab.android-desktop $F && log "hook: vold USB rule removed from fstab"
+# apgetty (UART shell) has no UART configured here and crash-loops
+: > /tmp/empty.rc && mount --bind /tmp/empty.rc /new/system_ext/etc/init/apgetty.rc && log "hook: apgetty disabled"
+log "hook: kvm: $(ls /sys/class/misc | grep -E 'kvm|vhost' | tr '\n' ' ')"
+
+# KVM trace -> kvmtrace.txt: guest exceptions / failed emulation / triple faults, to see why the
+# Trusty VM goes silent. Reader opens trace_pipe now so it survives switch_root.
+T=/tmp/tracing; mkdir -p $T
+if mount -t tracefs tracefs $T; then
+  E=$T/events/kvm
+  echo 8192 > $T/buffer_size_kb
+  for ev in kvm_inj_exception kvm_emulate_insn kvm_userspace_exit kvm_exit kvm_pio kvm_mmio kvm_hypercall kvm_fast_mmio kvm_inj_virq kvm_pic_set_irq kvm_ioapic_set_irq kvm_msi_set_irq kvm_set_irq kvm_apic_accept_irq; do
+    [ -d $E/$ev ] && echo 1 > $E/$ev/enable
+  done
+  ( exec 4<$T/trace_pipe; /gbos/busybox dd bs=4096 count=8000 iflag=fullblock <&4 >> $L/kvmtrace.txt 2>/dev/null ) &
+  log "hook: kvm tracing (all exits) -> kvmtrace.txt"
+else
+  log "hook: tracefs mount FAILED"
+fi
+
+# libz: adler32_z's AVX-VNNI helper (vpdpwssd) traps on this CPU (~half of all emulated instructions).
+# The patched copies (tools/patch_libz_adler.py) make adler32_z always take its scalar path. Each is only
+# bind-mounted over the exact original it was made from.
+for p in system:/new/system/lib64/libz.so:371f70d6a9392327cb36838d0cbc7af7388d1689c25d91cd343af8e58433683b vendor:/new/vendor/lib64/libz.so:e45aecb65cbb40f0c3070b05aa9d974076d401ed6f2aff3081af26a14e812590; do
+  n=${p%%:*}; r=${p#*:}; t=${r%%:*}; h=${r#*:}
+  if [ -f $G/patched/$n.libz.so ] && [ "$(sha256sum $t | cut -d' ' -f1)" = "$h" ]; then
+    mount --bind $G/patched/$n.libz.so $t && log "hook: patched $n libz (scalar adler32) active"
+  else
+    log "hook: $n libz NOT patched (missing patch or unexpected original)"
+  fi
+done

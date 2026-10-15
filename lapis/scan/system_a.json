@@ -1,0 +1,429 @@
+{
+ "label": "system_a",
+ "elf_files": 1219,
+ "instructions": 53175550,
+ "timed_out": [],
+ "totals": {
+  "AVX-512": 26064,
+  "GFNI": 1787,
+  "AVX-VNNI": 598,
+  "ADX": 358,
+  "VAES (256/512-bit)": 200,
+  "SHA-NI": 184,
+  "VPCLMULQDQ (256/512-bit)": 132,
+  "AVX-IFMA": 5
+ },
+ "files_per_feature": {
+  "GFNI": 92,
+  "AVX-VNNI": 30,
+  "AVX-512": 11,
+  "AVX-IFMA": 5,
+  "VPCLMULQDQ (256/512-bit)": 4,
+  "VAES (256/512-bit)": 2,
+  "SHA-NI": 2,
+  "ADX": 1
+ },
+ "top_files": {
+  "GFNI": [
+   [
+    "system/lib64/libyuv.so",
+    197
+   ],
+   [
+    "system/lib64/libsfplugin_ccodec_utils.so",
+    193
+   ],
+   [
+    "system/lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+    137
+   ],
+   [
+    "system/lib64/libndk_translation.so",
+    115
+   ],
+   [
+    "system/bin/cups/filter/gs",
+    97
+   ],
+   [
+    "system/lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so",
+    84
+   ],
+   [
+    "system/lib64/service.incremental.so",
+    82
+   ],
+   [
+    "system/lib64/libcrypto.so",
+    81
+   ],
+   [
+    "system/lib64/librtp_jni.so",
+    55
+   ],
+   [
+    "system/bin/surfaceflinger",
+    44
+   ],
+   [
+    "system/bin/mkfs.erofs",
+    41
+   ],
+   [
+    "system/bin/fsck.erofs",
+    41
+   ],
+   [
+    "system/bin/dump.erofs",
+    41
+   ],
+   [
+    "system/lib64/libchrome.so",
+    37
+   ],
+   [
+    "system/bin/apexd",
+    34
+   ]
+  ],
+  "AVX-VNNI": [
+   [
+    "system/lib64/libaudioprocessing.so",
+    80
+   ],
+   [
+    "system/lib64/libhwui.so",
+    46
+   ],
+   [
+    "system/bin/cups/filter/gs",
+    39
+   ],
+   [
+    "system/lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+    38
+   ],
+   [
+    "system/lib64/libinput.so",
+    33
+   ],
+   [
+    "system/lib64/libsfplugin_ccodec_utils.so",
+    32
+   ],
+   [
+    "system/lib64/libyuv.so",
+    32
+   ],
+   [
+    "system/lib64/libcrypto.so",
+    28
+   ],
+   [
+    "system/bin/surfaceflinger",
+    28
+   ],
+   [
+    "system/lib64/libRSCpuRef.so",
+    25
+   ],
+   [
+    "system/lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so",
+    24
+   ],
+   [
+    "system/lib64/service.incremental.so",
+    24
+   ],
+   [
+    "system/lib64/libpdfium.so",
+    19
+   ],
+   [
+    "system/bin/apexd",
+    16
+   ],
+   [
+    "system/bin/bootstrap/linker64",
+    16
+   ]
+  ],
+  "AVX-512": [
+   [
+    "system/lib64/libjxl.so",
+    25301
+   ],
+   [
+    "system/lib64/libcrypto.so",
+    527
+   ],
+   [
+    "system/lib64/libsfplugin_ccodec_utils.so",
+    57
+   ],
+   [
+    "system/lib64/libstagefright.so",
+    57
+   ],
+   [
+    "system/lib64/libyuv.so",
+    57
+   ],
+   [
+    "system/lib64/libhwui.so",
+    52
+   ],
+   [
+    "system/bin/virtual_camera",
+    5
+   ],
+   [
+    "system/lib64/libhoudini.so",
+    4
+   ],
+   [
+    "system/lib64/libtcb.so",
+    2
+   ],
+   [
+    "system/framework/oat/x86_64/desktop-services.odex",
+    1
+   ],
+   [
+    "system/framework/x86_64/boot-framework.oat",
+    1
+   ]
+  ],
+  "AVX-IFMA": [
+   [
+    "system/lib64/libinputflinger.so",
+    1
+   ],
+   [
+    "system/lib64/libinput.so",
+    1
+   ],
+   [
+    "system/bin/ectool",
+    1
+   ],
+   [
+    "system/bin/prefetch",
+    1
+   ],
+   [
+    "system/bin/aisealhostservice",
+    1
+   ]
+  ],
+  "VPCLMULQDQ (256/512-bit)": [
+   [
+    "system/lib64/libcrypto.so",
+    114
+   ],
+   [
+    "system/lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so",
+    6
+   ],
+   [
+    "system/lib64/service.incremental.so",
+    6
+   ],
+   [
+    "system/lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+    6
+   ]
+  ],
+  "VAES (256/512-bit)": [
+   [
+    "system/lib64/libcrypto.so",
+    136
+   ],
+   [
+    "system/lib64/liblzma.so",
+    64
+   ]
+  ],
+  "SHA-NI": [
+   [
+    "system/lib64/libcrypto.so",
+    128
+   ],
+   [
+    "system/lib64/liblzma.so",
+    56
+   ]
+  ],
+  "ADX": [
+   [
+    "system/lib64/libcrypto.so",
+    358
+   ]
+  ]
+ },
+ "all_files": {
+  "GFNI": [
+   "system/bin/aisealhostservice",
+   "system/bin/apexd",
+   "system/bin/bootstrap/linker64",
+   "system/bin/bpftool",
+   "system/bin/cameraserver",
+   "system/bin/cups/filter/gs",
+   "system/bin/curl",
+   "system/bin/di-edid-decode",
+   "system/bin/dnsmasq",
+   "system/bin/dump.erofs",
+   "system/bin/dumpsys_to_lsusb",
+   "system/bin/ectool",
+   "system/bin/fsck.erofs",
+   "system/bin/fsck.exfat",
+   "system/bin/gpuservice",
+   "system/bin/gsctool",
+   "system/bin/heapprofd",
+   "system/bin/hidservice",
+   "system/bin/init",
+   "system/bin/kcmdlinemodprobe",
+   "system/bin/keystore2",
+   "system/bin/logd",
+   "system/bin/mdnsd",
+   "system/bin/mkfs.erofs",
+   "system/bin/netd",
+   "system/bin/newfs_msdos",
+   "system/bin/pbtombstone",
+   "system/bin/perfetto",
+   "system/bin/prefetch",
+   "system/bin/simpleperf",
+   "system/bin/snapuserd",
+   "system/bin/storaged",
+   "system/bin/surfaceflinger",
+   "system/bin/tcpdump",
+   "system/bin/toolbox",
+   "system/bin/traced_perf",
+   "system/bin/trigger_perfetto",
+   "system/bin/typec_connector_class",
+   "system/bin/update_engine",
+   "system/bin/vold",
+   "system/lib64/bootstrap/libc.so",
+   "system/lib64/libFFTEm.so",
+   "system/lib64/libGLESv2_angle.so",
+   "system/lib64/libLLVM_android.so",
+   "system/lib64/libaconfig_storage_read_api_cc.so",
+   "system/lib64/libandroid_runtime.so",
+   "system/lib64/libandroidfw.so",
+   "system/lib64/libapexsupport.so",
+   "system/lib64/libbpf.so",
+   "system/lib64/libbrillo.so",
+   "system/lib64/libchrome.so",
+   "system/lib64/libcrypto.so",
+   "system/lib64/libcups.so",
+   "system/lib64/libcupsfilters.so",
+   "system/lib64/libcurl.so",
+   "system/lib64/libcycleperuid.so",
+   "system/lib64/libdebugstore_cxx.so",
+   "system/lib64/libdng_sdk.so",
+   "system/lib64/libfdtrack.so",
+   "system/lib64/libfec.so",
+   "system/lib64/libfs_mgr.so",
+   "system/lib64/libfs_mgr_binder.so",
+   "system/lib64/libft2.so",
+   "system/lib64/libharfbuzz_ng.so",
+   "system/lib64/libharfbuzz_subset.so",
+   "system/lib64/libhwui.so",
+   "system/lib64/libimage_io.so",
+   "system/lib64/libincfs.so",
+   "system/lib64/libinput.so",
+   "system/lib64/libinputflinger.so",
+   "system/lib64/libjpeg.so",
+   "system/lib64/libkll.so",
+   "system/lib64/liblzma.so",
+   "system/lib64/libminikin.so",
+   "system/lib64/libndk_translation.so",
+   "system/lib64/libperfetto.so",
+   "system/lib64/libperfetto_c.so",
+   "system/lib64/libpng.so",
+   "system/lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+   "system/lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so",
+   "system/lib64/librtp_jni.so",
+   "system/lib64/libsfplugin_ccodec_utils.so",
+   "system/lib64/libsnapshot.so",
+   "system/lib64/libssl.so",
+   "system/lib64/libstagefright.so",
+   "system/lib64/libstagefright_amrnb_common.so",
+   "system/lib64/libsysutils.so",
+   "system/lib64/libtrust_token_jni.so",
+   "system/lib64/libunwindstack.so",
+   "system/lib64/libyuv.so",
+   "system/lib64/libz.so",
+   "system/lib64/service.incremental.so"
+  ],
+  "AVX-VNNI": [
+   "system/bin/aisealhostservice",
+   "system/bin/apexd",
+   "system/bin/bootstrap/linker64",
+   "system/bin/bpftool",
+   "system/bin/cups/filter/gs",
+   "system/bin/init",
+   "system/bin/pbtombstone",
+   "system/bin/simpleperf",
+   "system/bin/snapuserd",
+   "system/bin/surfaceflinger",
+   "system/bin/update_engine",
+   "system/lib64/libFFTEm.so",
+   "system/lib64/libRSCpuRef.so",
+   "system/lib64/libaudioprocessing.so",
+   "system/lib64/libcrypto.so",
+   "system/lib64/libfdtrack.so",
+   "system/lib64/libhwui.so",
+   "system/lib64/libinput.so",
+   "system/lib64/libkll.so",
+   "system/lib64/libndk_translation.so",
+   "system/lib64/libpdfium.so",
+   "system/lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+   "system/lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so",
+   "system/lib64/librtp_jni.so",
+   "system/lib64/libsfplugin_ccodec_utils.so",
+   "system/lib64/libsnapshot.so",
+   "system/lib64/libstagefright.so",
+   "system/lib64/libyuv.so",
+   "system/lib64/libz.so",
+   "system/lib64/service.incremental.so"
+  ],
+  "AVX-512": [
+   "system/bin/virtual_camera",
+   "system/framework/oat/x86_64/desktop-services.odex",
+   "system/framework/x86_64/boot-framework.oat",
+   "system/lib64/libcrypto.so",
+   "system/lib64/libhoudini.so",
+   "system/lib64/libhwui.so",
+   "system/lib64/libjxl.so",
+   "system/lib64/libsfplugin_ccodec_utils.so",
+   "system/lib64/libstagefright.so",
+   "system/lib64/libtcb.so",
+   "system/lib64/libyuv.so"
+  ],
+  "AVX-IFMA": [
+   "system/bin/aisealhostservice",
+   "system/bin/ectool",
+   "system/bin/prefetch",
+   "system/lib64/libinput.so",
+   "system/lib64/libinputflinger.so"
+  ],
+  "VPCLMULQDQ (256/512-bit)": [
+   "system/lib64/libcrypto.so",
+   "system/lib64/libprotobuf-cpp-full-6.33.5-absl20260526.so",
+   "system/lib64/libprotobuf-cpp-lite-6.33.5-absl20260526.so",
+   "system/lib64/service.incremental.so"
+  ],
+  "VAES (256/512-bit)": [
+   "system/lib64/libcrypto.so",
+   "system/lib64/liblzma.so"
+  ],
+  "SHA-NI": [
+   "system/lib64/libcrypto.so",
+   "system/lib64/liblzma.so"
+  ],
+  "ADX": [
+   "system/lib64/libcrypto.so"
+  ]
+ }
+}

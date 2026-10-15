@@ -1,0 +1,34 @@
+<!--
+    Input:
+        system/libhidl/vintfdata/system_ext_manifest.default.xml
+        device/google/desktop/prebuilts/trusty/desktop-trusty_security_vm_launcher.xml
+        device/google/desktop/common/trusty/keymint/android.hardware.security.keymint-service.desktop_trusty_system_vm.xml
+        system/hwservicemanager/hwservicemanager.xml
+-->
+<manifest version="9.0" type="framework">
+    <hal format="aidl" exclusive-to="virtual-machine">
+        <name>android.desktop.security.finger_guard</name>
+        <accessor>android.os.IAccessor/IFingerGuard/security_vm_fingerguard</accessor>
+        <fqname>IFingerGuard/default</fqname>
+    </hal>
+    <hal format="aidl" exclusive-to="virtual-machine">
+        <name>android.hardware.security.sharedsecret</name>
+        <accessor>android.os.IAccessor/sharedsecret/security_vm_shared_secret</accessor>
+        <fqname>ISharedSecret/security_vm</fqname>
+    </hal>
+    <hal format="hidl" max-level="8">
+        <name>android.hidl.manager</name>
+        <transport>hwbinder</transport>
+        <fqname>@1.2::IServiceManager/default</fqname>
+    </hal>
+    <hal format="hidl" max-level="8">
+        <name>android.hidl.token</name>
+        <transport>hwbinder</transport>
+        <fqname>@1.0::ITokenManager/default</fqname>
+    </hal>
+    <hal format="aidl" exclusive-to="virtual-machine">
+        <name>com.android.trusty.rust.KeyMintProvisioningService</name>
+        <accessor>android.os.IAccessor/IKeyMintProvisioningService/security_vm_keymint</accessor>
+        <fqname>IKeyMintProvisioningService/default</fqname>
+    </hal>
+</manifest>

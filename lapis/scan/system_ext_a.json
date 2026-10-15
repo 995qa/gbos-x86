@@ -1,0 +1,174 @@
+{
+ "label": "system_ext_a",
+ "elf_files": 22,
+ "instructions": 8915355,
+ "timed_out": [],
+ "totals": {
+  "AVX-512": 5393,
+  "ADX": 5038,
+  "SHA-NI": 1584,
+  "VAES (256/512-bit)": 1360,
+  "VPCLMULQDQ (256/512-bit)": 1140,
+  "GFNI": 7,
+  "RDSEED": 6,
+  "CLWB": 4,
+  "CLFLUSHOPT": 2,
+  "AVX-IFMA": 1
+ },
+ "files_per_feature": {
+  "GFNI": 3,
+  "AVX-IFMA": 1,
+  "CLFLUSHOPT": 2,
+  "CLWB": 2,
+  "RDSEED": 2,
+  "AVX-512": 2,
+  "SHA-NI": 2,
+  "VPCLMULQDQ (256/512-bit)": 2,
+  "VAES (256/512-bit)": 2,
+  "ADX": 2
+ },
+ "top_files": {
+  "GFNI": [
+   [
+    "bin/serialservice",
+    5
+   ],
+   [
+    "bin/trusty_security_vm_launcher",
+    1
+   ],
+   [
+    "bin/hw/android.hardware.security.keymint-service.trusty_system_vm",
+    1
+   ]
+  ],
+  "AVX-IFMA": [
+   [
+    "bin/trusty_security_vm_launcher",
+    1
+   ]
+  ],
+  "CLFLUSHOPT": [
+   [
+    "etc/vm/trusty_vm/desktop_trusty_signed.elf",
+    1
+   ],
+   [
+    "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+    1
+   ]
+  ],
+  "CLWB": [
+   [
+    "etc/vm/trusty_vm/desktop_trusty_signed.elf",
+    2
+   ],
+   [
+    "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+    2
+   ]
+  ],
+  "RDSEED": [
+   [
+    "etc/vm/trusty_vm/desktop_trusty_signed.elf",
+    3
+   ],
+   [
+    "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+    3
+   ]
+  ],
+  "AVX-512": [
+   [
+    "etc/vm/trusty_vm/desktop_trusty_signed.elf",
+    2697
+   ],
+   [
+    "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+    2696
+   ]
+  ],
+  "SHA-NI": [
+   [
+    "etc/vm/trusty_vm/desktop_trusty_signed.elf",
+    792
+   ],
+   [
+    "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+    792
+   ]
+  ],
+  "VPCLMULQDQ (256/512-bit)": [
+   [
+    "etc/vm/trusty_vm/desktop_trusty_signed.elf",
+    570
+   ],
+   [
+    "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+    570
+   ]
+  ],
+  "VAES (256/512-bit)": [
+   [
+    "etc/vm/trusty_vm/desktop_trusty_signed.elf",
+    680
+   ],
+   [
+    "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+    680
+   ]
+  ],
+  "ADX": [
+   [
+    "etc/vm/trusty_vm/desktop_trusty_signed.elf",
+    2519
+   ],
+   [
+    "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+    2519
+   ]
+  ]
+ },
+ "all_files": {
+  "GFNI": [
+   "bin/hw/android.hardware.security.keymint-service.trusty_system_vm",
+   "bin/serialservice",
+   "bin/trusty_security_vm_launcher"
+  ],
+  "AVX-IFMA": [
+   "bin/trusty_security_vm_launcher"
+  ],
+  "CLFLUSHOPT": [
+   "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+   "etc/vm/trusty_vm/desktop_trusty_signed.elf"
+  ],
+  "CLWB": [
+   "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+   "etc/vm/trusty_vm/desktop_trusty_signed.elf"
+  ],
+  "RDSEED": [
+   "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+   "etc/vm/trusty_vm/desktop_trusty_signed.elf"
+  ],
+  "AVX-512": [
+   "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+   "etc/vm/trusty_vm/desktop_trusty_signed.elf"
+  ],
+  "SHA-NI": [
+   "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+   "etc/vm/trusty_vm/desktop_trusty_signed.elf"
+  ],
+  "VPCLMULQDQ (256/512-bit)": [
+   "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+   "etc/vm/trusty_vm/desktop_trusty_signed.elf"
+  ],
+  "VAES (256/512-bit)": [
+   "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+   "etc/vm/trusty_vm/desktop_trusty_signed.elf"
+  ],
+  "ADX": [
+   "etc/vm/trusty_vm/desktop_trusty_ext_boot_signed.elf",
+   "etc/vm/trusty_vm/desktop_trusty_signed.elf"
+  ]
+ }
+}
