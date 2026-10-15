@@ -21,10 +21,12 @@ from the internal NVMe, reaches the desktop, and runs Play Store apps.
 | Battery / AC | ACPI battery |
 | Play Store installs | With the patched libcrypto (SHA-256 no longer emulated) |
 | Screen-lock password | Software Gatekeeper (`gatekeeper/soft_gk.c`) |
+| Correct display colours / black levels | Kernel #29: i915 ignores the HWC's gamma tables (see below) |
 
 | Not done / limited | |
 |---|---|
 | Speed | Some instructions are still emulated in the kernel (see "Why it's slow") |
+| Night Light | Gamma tables from userspace are ignored (that's the colour fix), so it has no effect |
 | Linux Terminal (AVF) | Secretkeeper hang fixed; VM boot not yet confirmed |
 | Auth-bound keystore keys | `soft_gk`'s auth tokens aren't trusted by the software KeyMint |
 | OS updates | Built-in OTA can't work; manual process only (see "Updating Googlebook OS") |

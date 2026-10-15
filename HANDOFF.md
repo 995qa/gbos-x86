@@ -129,3 +129,7 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   i.e. the HWC writes its xe log-gamma curve into i915's linear GAMMA_LUT every commit, lifting the shadows.
   Kernel #29 (i915_ignore_gamma.sh): hw degamma/gamma/CTM always NULL (linear). Includes #25/#27 changes.
   On the stick (MODE=install -> 1). #27 kept as usb/out/BOOTX64.EFI.prev-27. Cost: Night Light won't work.
+- 2026-10-15 CONFIRMED by the user on kernel #29: the white veil / pale colours are gone. Cause: drm_hwcomposer's
+  LOG_GAMMA_LUT -> GAMMA_LUT fallback (an xe log-gamma curve in i915's linear LUT). Fix: i915_ignore_gamma.sh.
+  The colour-space (#23/#25), full-range (#27) and sRGB-only SF props weren't the cause but are kept (harmless,
+  more correct for this sRGB panel). Known cost: Night Light has no effect.
