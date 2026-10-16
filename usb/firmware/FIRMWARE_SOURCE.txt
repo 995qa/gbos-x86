@@ -1,0 +1,2 @@
+linux-firmware commit: d5455717ead0affc6116809d8c6e71f95c63e8e1
+sof-bin: v2026.09.2

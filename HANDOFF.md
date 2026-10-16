@@ -142,3 +142,13 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   stage0's first `dmctl` (avoids ~3.7M SHA-NI traps at boot); hook.sh skips re-binding ("already patched"). install.sh
   FILES and make_gbos86_image.sh now ship it, so Update copies it to the NVMe. Stick deployed with kernel #30.
   Not yet verified on hardware: look for "early: patched system libcrypto" before "running gbos/hook.sh" in stage0-dmesg.txt.
+- 2026-10-16: **Generic Intel gen6+ support (kernel #32, not yet booted on hardware).** `configure_whl.py --generic` adds ~400
+  modules (Wi-Fi: iwldvm/iwlmvm/rtw88/rtw89/mt76/ath10k/ath11k/brcmfmac; BT: btusb+vendors, btintel_pcie; HDA codecs + SOF/SoundWire;
+  I2C-HID/ISH/RMI4/PS2; dell/hp/thinkpad/ideapad/asus/... platform drivers; card reader, UVC, ethernet). `usb/hwdetect.sh` (from
+  hook.sh) bind-mounts `gbos/modules` over /lib/modules, coldplugs by modalias (up to 4 passes) with firmware from `gbos/firmware`,
+  and writes `logs/boot-N/hwdetect.txt`. The old Wi-Fi/BT sequence stays as a fallback when `gbos/modules` is absent.
+  `snd_intel_dspcfg.dsp_driver=1` was REMOVED from the cmdline (HDA vs SOF is now automatic; on the Dell, Dell vendor + no DMIC should
+  still pick HDA. **Verify sound on the 5300**; rollback = the #30 BOOTX64.EFI from git history, `e2207d9`). Firmware is not committed:
+  `tools/fetch_firmware.sh` (linux-firmware d5455717 + sof-bin 2026.09.2, ~290 MB); iwlwifi files live at the firmware root
+  (this kernel doesn't use the intel/iwlwifi/ prefix). Audio HAL config is generated for non-PCH cards (best effort).
+  QEMU: ISA_EMU_TEST_PASS; `kernel/isa_emu_test/run_hwdetect.py` loaded e1000e/i2c_i801/rapl/wmi/video by modalias.

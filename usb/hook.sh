@@ -4,33 +4,45 @@
 # zram is a module here (=m in Google's config too); mmd_setup aborts without /sys/block/zram0.
 modprobe zram && log "hook: zram loaded" || log "hook: modprobe zram FAILED"
 
-# Wi-Fi: CNVi 9560/9462 (8086:9df0) needs iwlwifi-9000-pu-b0-jf-b0-46.ucode (linux-firmware), which
-# Google's vendor image doesn't carry. Point the firmware loader at the stick, load the driver, and
-# wait for the firmware so it isn't requested after switch_root (where /gbos no longer exists).
-# Afterwards point it at the same folder as seen from Android (/postinstall = the stick).
+# Generic hardware bring-up (gbOS86 for any Intel gen6+ laptop): usb/hwdetect.sh binds the full module tree from
+# gbos/modules, coldplugs every device by modalias (Wi-Fi, Bluetooth, audio, input, hotkeys, backlight, ...),
+# with firmware from gbos/firmware, and writes hwdetect.txt. Falls back to the original Latitude 5300 sequence
+# (below) when a stick has no gbos/modules.
 FWP=/sys/module/firmware_class/parameters/path
-if [ -f $G/firmware/iwlwifi-9000-pu-b0-jf-b0-46.ucode ]; then
-  echo -n $G/firmware > $FWP
-  modprobe iwlmvm && log "hook: iwlmvm loaded" || log "hook: modprobe iwlmvm FAILED"
-  i=0; while [ $i -lt 15 ] && ! dmesg | grep -q 'iwlwifi.*loaded firmware version'; do sleep 1; i=$((i+1)); done
-  log "hook: wifi after ${i}s: $(dmesg | grep -m1 -o 'iwlwifi.*loaded firmware version.*') ifaces: $(ls /sys/class/net | tr '\n' ' ')"
+if [ -f $G/hwdetect.sh ] && [ -d $G/modules/lib/modules ]; then
+  . $G/hwdetect.sh
+  gbos_hwdetect 15
+  # Late firmware requests (after switch_root) see the stick as /postinstall.
   echo -n /postinstall/gbos/firmware > $FWP
-fi
+else
+  # Wi-Fi: CNVi 9560/9462 (8086:9df0) needs iwlwifi-9000-pu-b0-jf-b0-46.ucode (linux-firmware), which
+  # Google's vendor image doesn't carry. Point the firmware loader at the stick, load the driver, and
+  # wait for the firmware so it isn't requested after switch_root (where /gbos no longer exists).
+  # Afterwards point it at the same folder as seen from Android (/postinstall = the stick).
+  FWP=/sys/module/firmware_class/parameters/path
+  if [ -f $G/firmware/iwlwifi-9000-pu-b0-jf-b0-46.ucode ]; then
+    echo -n $G/firmware > $FWP
+    modprobe iwlmvm && log "hook: iwlmvm loaded" || log "hook: modprobe iwlmvm FAILED"
+    i=0; while [ $i -lt 15 ] && ! dmesg | grep -q 'iwlwifi.*loaded firmware version'; do sleep 1; i=$((i+1)); done
+    log "hook: wifi after ${i}s: $(dmesg | grep -m1 -o 'iwlwifi.*loaded firmware version.*') ifaces: $(ls /sys/class/net | tr '\n' ' ')"
+    echo -n /postinstall/gbos/firmware > $FWP
+  fi
 
-# Bluetooth: the 9560's Bluetooth is a USB device (8087:0aaa) and needs btusb, which Google's kernel
-# (PCIe Bluetooth) doesn't build. gbos/kmod/ has btusb/btintel/btrtl from our tree; bluetooth and btbcm
-# are in the initramfs. Firmware: intel/ibt-17-16-1.sfi/.ddc in gbos/firmware.
-if [ -f $G/kmod/btusb.ko ]; then
-  [ -f $G/firmware/intel/ibt-17-16-1.sfi ] || log "hook: Bluetooth firmware intel/ibt-17-16-1.sfi missing"
-  # btintel loads the firmware during probe, i.e. right now: the loader must look on this volume
-  # ($G), not at /postinstall, which only exists after switch_root.
-  echo -n $G/firmware > $FWP
-  modprobe bluetooth && modprobe btbcm && insmod $G/kmod/btintel.ko && insmod $G/kmod/btrtl.ko \
-    && insmod $G/kmod/btusb.ko && log "hook: btusb loaded ($(ls /sys/class/bluetooth 2>/dev/null | tr '\n' ' '))" \
-    || log "hook: btusb load FAILED: $(dmesg | grep -iE 'btusb|btintel|bluetooth' | tail -2 | tr '\n' ' ')"
-  i=0; while [ $i -lt 20 ] && ! dmesg | grep -qE 'hci0: (Firmware loaded|Failed to load Intel firmware)'; do sleep 1; i=$((i+1)); done
-  log "hook: bluetooth: $(dmesg | grep -oE 'hci0: (Firmware loaded in [0-9]+ usecs|Failed to load Intel firmware[^)]*\)|Found device firmware: [^ ]+)' | tr '\n' ' ')"
-  echo -n /postinstall/gbos/firmware > $FWP
+  # Bluetooth: the 9560's Bluetooth is a USB device (8087:0aaa) and needs btusb, which Google's kernel
+  # (PCIe Bluetooth) doesn't build. gbos/kmod/ has btusb/btintel/btrtl from our tree; bluetooth and btbcm
+  # are in the initramfs. Firmware: intel/ibt-17-16-1.sfi/.ddc in gbos/firmware.
+  if [ -f $G/kmod/btusb.ko ]; then
+    [ -f $G/firmware/intel/ibt-17-16-1.sfi ] || log "hook: Bluetooth firmware intel/ibt-17-16-1.sfi missing"
+    # btintel loads the firmware during probe, i.e. right now: the loader must look on this volume
+    # ($G), not at /postinstall, which only exists after switch_root.
+    echo -n $G/firmware > $FWP
+    modprobe bluetooth && modprobe btbcm && insmod $G/kmod/btintel.ko && insmod $G/kmod/btrtl.ko \
+      && insmod $G/kmod/btusb.ko && log "hook: btusb loaded ($(ls /sys/class/bluetooth 2>/dev/null | tr '\n' ' '))" \
+      || log "hook: btusb load FAILED: $(dmesg | grep -iE 'btusb|btintel|bluetooth' | tail -2 | tr '\n' ' ')"
+    i=0; while [ $i -lt 20 ] && ! dmesg | grep -qE 'hci0: (Firmware loaded|Failed to load Intel firmware)'; do sleep 1; i=$((i+1)); done
+    log "hook: bluetooth: $(dmesg | grep -oE 'hci0: (Firmware loaded in [0-9]+ usecs|Failed to load Intel firmware[^)]*\)|Found device firmware: [^ ]+)' | tr '\n' ' ')"
+    echo -n /postinstall/gbos/firmware > $FWP
+  fi
 fi
 
 # drm.debug=0x04 (KMS only; not ATOMIC, which logs every frame): i915 dumps gamma/CSC mode and range per modeset while
@@ -251,15 +263,29 @@ fi
 F=/new/vendor/etc/fstab.android-desktop
 grep -v 'voldmanaged=usb' $F > /tmp/fstab.android-desktop \
   && mount --bind /tmp/fstab.android-desktop $F && log "hook: vold USB rule removed from fstab"
-# Audio: our kernel has the legacy HDA driver (card PCH) instead of Google's SOF SoundWire card.
-# Point the audio HAL's default config at gbos/audio/gbos-hda-pch, added next to the vendor ones.
+# Audio: the audio HAL (dras) needs a config whose <soundcard> equals the ALSA card id. Google ships only its SOF
+# SoundWire card; gbos/audio/gbos-hda-pch is the legacy-HDA one (card id PCH, true for nearly every Intel PCH HDA
+# laptop). For any other main card (SOF: sof-hda-dsp, sof-rt5682, ...) a copy is generated with that card's id and
+# name, which is a best-effort mapping (mixer controls differ per codec).
 A=/new/vendor/etc/audio
+AC=gbos-hda-pch
 if [ -f $G/audio/gbos-hda-pch/audio_config.xml ]; then
+  CARD=$(grep '\[' /proc/asound/cards 2>/dev/null | grep -v -i hdmi | head -n 1)
+  CID=$(echo "$CARD" | sed -n 's/^ *[0-9]* \[\([^] ]*\) *\].*/\1/p'); CNAME=$(echo "$CARD" | sed -n 's/.* - //p')
+  mkdir -p /tmp/gbos-audio
+  if [ -n "$CID" ] && [ "$CID" != PCH ]; then
+    AC=gbos-gen; rm -rf /tmp/gbos-audio/$AC; cp -r $G/audio/gbos-hda-pch /tmp/gbos-audio/$AC
+    sed -i "s/HDA Intel PCH/$CNAME/g; s/PCH/$CID/g" /tmp/gbos-audio/$AC/*.xml
+    sed "s/<soundcard>PCH/<soundcard>$CID/; s#gbos-hda-pch#$AC#" $G/audio/audio_default.xml > /tmp/gbos-audio/audio_default.xml
+    ASRC=/tmp/gbos-audio/$AC; ADEF=/tmp/gbos-audio/audio_default.xml
+  else
+    ASRC=$G/audio/gbos-hda-pch; ADEF=$G/audio/audio_default.xml
+  fi
   mkdir -p /tmp/vaudio && mount --bind $A /tmp/vaudio && mount -t tmpfs -o mode=0755 tmpfs $A \
     && for f in /tmp/vaudio/*; do n=${f##*/}; { [ -d $f ] && mkdir -p $A/$n || touch $A/$n; } && mount --bind $f $A/$n; done \
-    && mkdir -p $A/gbos-hda-pch && mount --bind $G/audio/gbos-hda-pch $A/gbos-hda-pch \
-    && mount --bind $G/audio/audio_default.xml /new/vendor/etc/data/hal_configs/audio_default.xml \
-    && log "hook: audio config gbos-hda-pch (legacy HDA card PCH) active"
+    && mkdir -p $A/$AC && mount --bind $ASRC $A/$AC \
+    && mount --bind $ADEF /new/vendor/etc/data/hal_configs/audio_default.xml \
+    && log "hook: audio config $AC (card id ${CID:-none}, name ${CNAME:-none}) active"
 fi
 # apgetty (UART shell) has no UART configured here and crash-loops
 : > /tmp/empty.rc && mount --bind /tmp/empty.rc /new/system_ext/etc/init/apgetty.rc && log "hook: apgetty disabled"

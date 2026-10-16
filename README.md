@@ -92,6 +92,34 @@ battery/AC, Intel LPSS I2C (touchpad), legacy HDA audio and `btusb` are built in
 `HANDOFF.md` is the chronological engineering log: every bug, its evidence and its fix. Read it before
 changing anything.
 
+## Other laptops (generic Intel gen 6+ support)
+
+The kernel (#31) builds drivers for most Intel-era laptops as **modules**, and boot detects what is present:
+
+1. `usb/hwdetect.sh` (called by `hook.sh`) bind-mounts the stick's full module tree (`gbos/modules/`, depmod'ed for
+   the running kernel) over `/lib/modules`, then does a udev-style *coldplug*: it reads every device's sysfs `modalias`
+   and `modprobe -a`'s them, repeating until no new module loads (a loaded driver creates new devices).
+2. The kernel's firmware loader is pointed at `gbos/firmware` (a trimmed linux-firmware + sof-bin, ~300 MB).
+3. `logs/boot-N/hwdetect.txt` records DMI vendor/model, PCI/USB devices **without a driver**, input devices, network and
+   Bluetooth interfaces, backlight, sound cards, rfkill, missing-firmware messages and `lsmod`. Send it back when
+   something doesn't work.
+
+| Area | Covered |
+|---|---|
+| CPU | Anything the ISA-emulation kernel handles: 6th gen (Skylake) and newer; the Googlebook OS needs instructions older CPUs lack, so it is emulated (slow on pre-2021 CPUs) |
+| Graphics / display / brightness | `i915` (Gen9 to Raptor Lake) + ACPI video/backlight; `xe` for newer parts (**untested**; the colour/gamma fixes are i915-only) |
+| Wi-Fi | Intel (`iwldvm`: 7260/7265, `iwlmvm`: 8265 to AX211/BE200), Realtek rtw88/rtw89, MediaTek mt7921/7922/7925, Qualcomm ath10k/ath11k, Broadcom brcmfmac |
+| Bluetooth | `btusb` with Intel/Realtek/MediaTek/Qualcomm/Broadcom, Intel PCIe BT |
+| Sound | Legacy HDA with every common codec, **or** SOF (Intel DSP, DMIC, SoundWire); the kernel picks per machine (`snd_intel_dspcfg`). The audio HAL config is generated for the card that appears (`hook.sh`) |
+| Touchpad / keyboard | Intel LPSS I2C-HID, ISH, PS/2 (Synaptics, ALPS, Elan, ...), Synaptics RMI4 |
+| Hotkeys, fans, rfkill | Dell, HP, ThinkPad, IdeaPad, Asus, Acer, Samsung, MSI, Sony, Fujitsu, LG, Intel HID/VBTN |
+| Other | SD card readers (Realtek, SDHCI), USB webcams (UVC), Ethernet (r8169, e1000e, igc, USB r8152 and friends) |
+
+**Honest limits.** Only the Latitude 5300 has been booted; everything else is built and wired but untested on
+hardware. Sound on SOF machines needs the codec's mixer controls to match the generated config (best effort);
+suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not covered. Build the payload with
+`tools/fetch_firmware.sh` (firmware, not committed) and `kernel/isa_emu_patch/build_generic*.sh` (modules, not committed).
+
 ## Repository map
 
 | Path | What |

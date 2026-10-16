@@ -40,3 +40,12 @@ __pycache__/
 
 # Built gbOS86 images (Google OS inside: never commit or share)
 /dist/
+
+# gbOS86 generic-hardware payload, regenerated (not committed: ~300 MB firmware, ~1 GB-class module tree):
+#   tools/fetch_firmware.sh        -> usb/firmware/** (linux-firmware + sof-bin subset; FIRMWARE_SOURCE.txt records versions)
+#   kernel/isa_emu_patch/build_generic*.sh -> usb/modules/ (full depmod'ed module tree)
+# Files that were already tracked (iwlwifi-9000 ucode, ibt-17-16-1, regulatory.db) stay tracked.
+/usb/firmware/*/
+!/usb/firmware/intel/
+/usb/firmware/intel/*
+/usb/modules/

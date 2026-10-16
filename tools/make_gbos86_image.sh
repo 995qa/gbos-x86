@@ -32,20 +32,20 @@ python3 "$U/make_super.py" "$STAGE/gbos/gbos/super.img" "$STAGE/gbos/gbos/super.
 echo "== files"
 cp "$U/out/BOOTX64.EFI" "$STAGE/efi/EFI/BOOT/BOOTX64.EFI"
 G=$STAGE/gbos/gbos
-for f in hook.sh early_patch.sh install.sh apex_patch.sh gbos.cfg crossystem bootdisk.img libkm_compat.so system_ext_manifest.xml soft_gk; do
+for f in hook.sh early_patch.sh hwdetect.sh install.sh apex_patch.sh gbos.cfg crossystem bootdisk.img libkm_compat.so system_ext_manifest.xml soft_gk; do
   cp "$U/$f" "$G/$f"
 done
-for d in firmware patched audio installer kmod; do cp -R "$U/$d" "$G/$d"; done
+for d in firmware patched audio installer kmod modules; do cp -R "$U/$d" "$G/$d"; done
 mkdir -p "$G/logs"
 # gbos.cfg ships with MODE=ask (the boot menu)
 grep -q '^MODE=ask$' "$G/gbos.cfg" || { echo "usb/gbos.cfg must have MODE=ask for the image"; exit 1; }
 cp "$ROOT/kernel/out/busybox" "$STAGE/gbos/busybox"
 mkdir -p "$STAGE/gbos/EFI/BOOT" && cp "$U/out/BOOTX64.EFI" "$STAGE/gbos/EFI/BOOT/BOOTX64.EFI"
 cat > "$STAGE/gbos/README.txt" <<'EOF'
-gbOS86: Googlebook OS on x86 laptops (tested: Dell Latitude 5300, i5-8365U).
+gbOS86: Googlebook OS on x86 laptops (Intel 6th gen+; boot-time hardware detection; tested: Dell Latitude 5300, i5-8365U).
 Boot this USB (F12 at the Dell logo) for the gbOS86 menu:
   1) live from USB   2) install or update on the internal SSD   3) boot the installed system
-Settings: gbos/gbos.cfg (MODE, DENSITY, RESOLUTION, ...). Logs: gbos/logs/boot-N/.
+Settings: gbos/gbos.cfg (MODE, DENSITY, RESOLUTION, HWDETECT ...). Logs: gbos/logs/boot-N/ (hwdetect.txt = what was detected).
 EOF
 du -sh "$STAGE/gbos/gbos/super.img" "$STAGE/gbos"
 
