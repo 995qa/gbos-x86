@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # gbOS86 AI diagnostics (init service gbos_localaidiag, root): state of the swapped-in AICore and Magic Pointer packages,
-# the API settings (whether present, the provider host and model, NEVER the key) and our own logs, 60 s and 300 s after boot,
+# the API settings (whether present, the provider host and model, NEVER the key) and our own logs, 40 s and 120 s after boot,
 # to logs/boot-N/localai.txt. $1 = boot number.
 OUT=/postinstall/gbos/logs/boot-$1/localai.txt
 snap() {
@@ -22,5 +22,5 @@ snap() {
   echo "-- logcat (our service)"
   logcat -d -v threadtime -s gbos-localai:V 2>&1 | tail -80
 }
-sleep 60; snap "60 s" >> "$OUT" 2>&1
-sleep 240; snap "300 s" >> "$OUT" 2>&1
+sleep 40; snap "40 s" >> "$OUT" 2>&1
+sleep 80; snap "120 s" >> "$OUT" 2>&1

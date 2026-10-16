@@ -30,7 +30,20 @@ save_logs() {
 }
 die() { halt_here "INSTALL FAILED: $*  (log: gbos/logs/boot-$N/install.log on the stick)"; }
 ask() { printf '%s' "$1" > $TTY; read -r REPLY < $TTY; echo "$1$REPLY" >> $L/install.log; }
-check() { a=$(sha256sum "$1" | cut -d' ' -f1); b=$(sha256sum "$2" | cut -d' ' -f1); [ "$a" = "$b" ] || die "verify failed: $2"; echo "ok $a $2" >> $L/install.log; }
+# check SOURCE COPY: byte-for-byte compare (the page cache is dropped before verifying, so this re-reads the copy from the disk). Much
+# faster than hashing both files with busybox's software sha256 (that took minutes for the 5 GB system image).
+check() { cmp -s "$1" "$2" || die "verify failed: $2"; echo "ok $2" >> $L/install.log; }
+
+# Big items (system image, firmware, modules) are skipped on update when nothing about them changed since the last VERIFIED copy.
+# A "stamp" is a hash of an item's file names, sizes and modification times on the stick. It is saved on the SSD (gbos/.stamps/) only
+# after the copy was verified, so the next update compares two short strings instead of reading ~5.5 GB twice and re-copying ~400 MB.
+# Replacing an item on the stick changes its file times, so a stale stamp cannot hide a real change. UPDATE_FULL=1 in gbos.cfg, or a
+# missing stamp, forces the full compare, copy and verify.
+STAMPED="super.img firmware modules"
+stamp_of() { _l=$(find "$G/$1" -type f -exec stat -c '%n %s %Y' {} + 2>/dev/null | sort); [ -n "$_l" ] || return 1; printf '%s\n' "$_l" | sha256sum | cut -d' ' -f1; }
+stamp_same() { [ -z "$UPDATE_FULL" ] && [ -f /mnt/nsys/gbos/.stamps/$1 ] && _s=$(stamp_of $1) && [ "$(cat /mnt/nsys/gbos/.stamps/$1)" = "$_s" ]; }
+stamp_save() { _s=$(stamp_of $1) && mkdir -p /mnt/nsys/gbos/.stamps && printf '%s\n' "$_s" > /mnt/nsys/gbos/.stamps/$1; }
+is_skipped() { case " $SKIP " in *" $1 "*) return 0;; esac; return 1; }
 
 # Optional AI stand-in for Google's AICore (the stock one needs hardware attestation this laptop can't do): Magic Pointer and
 # friends answer through an API the USER provides (an OpenAI-compatible chat API: address, key, model). Asked on every install and
@@ -225,8 +238,15 @@ if [ "${ACTION:-install}" = update ]; then
   say "Saving the installed system's logs to the stick (gbos/logs/boot-$N/nvme-logs) ..."
   save_logs /mnt/nsys/gbos 3
   say "Updating the installed system (data is not touched) ..."
-  for f in $FILES; do cmp -s $G/$f /mnt/nsys/gbos/$f || { say "  $f"; cp $G/$f /mnt/nsys/gbos/$f || die "copy $f failed"; }; done
-  for d in $DIRS; do rm -rf /mnt/nsys/gbos/$d; cp -r $G/$d /mnt/nsys/gbos/ || die "copy $d/ failed"; done
+  SKIP=""
+  for f in $FILES; do
+    case " $STAMPED " in *" $f "*) if stamp_same $f; then SKIP="$SKIP $f"; say "  $f unchanged, skipped"; continue; fi;; esac
+    cmp -s $G/$f /mnt/nsys/gbos/$f || { say "  $f"; cp $G/$f /mnt/nsys/gbos/$f || die "copy $f failed"; }
+  done
+  for d in $DIRS; do
+    case " $STAMPED " in *" $d "*) if stamp_same $d; then SKIP="$SKIP $d"; say "  $d/ unchanged, skipped"; continue; fi;; esac
+    say "  $d/"; rm -rf /mnt/nsys/gbos/$d; cp -r $G/$d /mnt/nsys/gbos/ || die "copy $d/ failed"
+  done
   cmp -s $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI || { say "  kernel"; cp $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI || die "copy kernel failed"; }
   localai_step /mnt/nsys "$NDATA"
   # Settings such as DENSITY follow the stick; the installed copy always boots normally.
@@ -234,8 +254,9 @@ if [ "${ACTION:-install}" = update ]; then
   sync; echo 3 > /proc/sys/vm/drop_caches
   say "Verifying ..."
   check $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI
-  for f in $FILES; do check $G/$f /mnt/nsys/gbos/$f; done
-  for d in $DIRS; do (cd $G && find $d -type f) | while read f; do check $G/$f /mnt/nsys/gbos/$f; done || exit 1; done || die "verify failed"
+  for f in $FILES; do is_skipped $f || check $G/$f /mnt/nsys/gbos/$f; done
+  for d in $DIRS; do is_skipped $d && continue; (cd $G && find $d -type f) | while read f; do check $G/$f /mnt/nsys/gbos/$f; done || exit 1; done || die "verify failed"
+  for i in $STAMPED; do stamp_save $i || say "  (could not save the update stamp for $i; the next update will do a full compare)"; done
   umount /mnt/nefi /mnt/nsys /mnt/stickefi; sync
   say ""
   say "Update done. Remove the USB stick and turn the laptop back on."
@@ -328,6 +349,7 @@ say "Verifying ..."
 check $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI
 for f in $FILES; do check $G/$f /mnt/nsys/gbos/$f; done
 for d in $DIRS; do (cd $G && find $d -type f) | while read f; do check $G/$f /mnt/nsys/gbos/$f; done || exit 1; done || die "verify failed"
+for i in $STAMPED; do stamp_save $i || true; done
 umount /mnt/nefi /mnt/nsys /mnt/stickefi; sync
 
 say ""

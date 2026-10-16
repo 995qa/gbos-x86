@@ -96,5 +96,49 @@ setup; rm /w/stick/localai/prep.sh
 run "y"
 grep -q 'RESULT LOCAL_AI=0' /w/out.txt && grep -q 'prep.sh is not on the stick' /w/out.txt && ok "incomplete stick -> skipped with a message" || fail "incomplete stick"
 
+# ---------------- update speed-ups: stamps and byte-compare verification ----------------
+sed -n '/^check() {/,/^is_skipped/p' "$INSTALL" > /tmp/stamps.sh
+cat > /w/stamp_driver.sh <<'DRV'
+G=/w/stick; L=/w; DIED=0
+die() { echo "DIE: $*"; DIED=1; }
+. /tmp/stamps.sh
+t() { if "$@"; then echo yes; else echo no; fi; }
+rm -rf /w/stick /mnt/nsys; mkdir -p /w/stick/firmware /mnt/nsys/gbos; : > /w/install.log
+echo aaaa > /w/stick/firmware/x; dd if=/dev/zero of=/w/stick/super.img bs=1024 count=64 2>/dev/null
+echo "no_stamp_yet=$(t stamp_same firmware)"
+stamp_save firmware; stamp_save super.img
+echo "after_save=$(t stamp_same firmware) $(t stamp_same super.img)"
+touch -d '2001-01-01 00:00:00' /w/stick/firmware/x
+echo "file_time_changed=$(t stamp_same firmware)"
+stamp_save firmware; echo "after_resave=$(t stamp_same firmware)"
+echo aaaaaaaa > /w/stick/firmware/x; touch -d '2001-01-01 00:00:00' /w/stick/firmware/x
+echo "size_changed=$(t stamp_same firmware)"
+stamp_save firmware; echo extra > /w/stick/firmware/new_file
+echo "file_added=$(t stamp_same firmware)"
+stamp_save firmware; rm /w/stick/firmware/new_file
+echo "file_removed=$(t stamp_same firmware)"
+stamp_save firmware; UPDATE_FULL=1; echo "forced_full=$(t stamp_same firmware)"; UPDATE_FULL=
+dd if=/dev/urandom of=/w/stick/super.img bs=1024 count=64 2>/dev/null; touch -d '2005-05-05 05:05:05' /w/stick/super.img   # a real replacement is a long copy, so it has a new time
+echo "same_size_new_content=$(t stamp_same super.img)"
+mkdir -p /w/stick/empty; echo "empty_dir_stamp=$(t stamp_of empty)"; echo "empty_never_same=$(t stamp_same empty)"
+SKIP=" super.img"; echo "skip_list=$(t is_skipped super.img) $(t is_skipped firmware)"
+printf one > /w/a; printf one > /w/b; printf two > /w/c
+check /w/a /w/b; echo "check_equal_died=$DIED"; check /w/a /w/c >/dev/null; echo "check_different_died=$DIED"
+grep -q 'sha256sum "\$1"' /tmp/stamps.sh && echo "check_still_hashes=yes" || echo "check_still_hashes=no"
+DRV
+sh /w/stamp_driver.sh > /w/stamp_out.txt 2>&1
+g() { sed -n "s/^$1=//p" /w/stamp_out.txt; }
+[ "$(g no_stamp_yet)" = no ] && ok "stamps: no saved stamp -> full path" || fail "no_stamp_yet"
+[ "$(g after_save)" = "yes yes" ] && ok "stamps: unchanged since the verified copy -> skipped" || fail "after_save: $(g after_save)"
+[ "$(g file_time_changed)" = no ] && [ "$(g after_resave)" = yes ] && ok "stamps: a changed file time is noticed (and a new stamp works)" || fail "time: $(g file_time_changed)/$(g after_resave)"
+[ "$(g size_changed)" = no ] && [ "$(g file_added)" = no ] && [ "$(g file_removed)" = no ] && ok "stamps: changed size, added file and removed file are all noticed" || fail "size/add/remove"
+[ "$(g forced_full)" = no ] && ok "stamps: UPDATE_FULL=1 forces the full path" || fail "forced_full"
+[ "$(g same_size_new_content)" = no ] && ok "stamps: same-size replacement (new file time) is noticed" || fail "same_size_new_content"
+[ "$(g empty_dir_stamp)" = no ] && [ "$(g empty_never_same)" = no ] && ok "stamps: an empty listing never counts as a match" || fail "empty"
+[ "$(g skip_list)" = "yes no" ] && ok "stamps: skip list lookup" || fail "skip_list: $(g skip_list)"
+[ "$(g check_equal_died)" = 0 ] && ok "check: identical files pass" || fail "check equal"
+[ "$(g check_different_died)" = 1 ] && ok "check: a differing copy stops the update" || fail "check different"
+[ "$(g check_still_hashes)" = no ] && ok "check: byte compare, no sha256 of both files" || fail "check still hashes"
+
 [ $fails = 0 ] && echo "ALL PASS" || echo "$fails FAILED"
 exit $fails

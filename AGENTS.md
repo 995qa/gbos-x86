@@ -15,7 +15,8 @@ Read `README.md` (what/how) and `HANDOFF.md` (chronological log of every bug and
 - The laptop has no shell/adb. All evidence comes from logs on the stick. Ask the user to boot the stick
   and choose **1 (Update)**, which copies the NVMe install's last 3 boots to
   `gbos/logs/boot-N/nvme-logs/` on the stick. Then plug the stick into the Mac.
-- Deploy = copy files to the stick, eject, user boots the stick and picks **1**. Kernel changes go to
+- Deploy = `tools/deploy_stick.sh` (copies only changed files, verifies after a remount, ejects the right disk: seconds), then the user boots the stick and picks **1**.
+  The updater skips the unchanged big items (system image, firmware, modules; `UPDATE_FULL=1` in gbos.cfg forces everything), so an Update is about a minute, and it saves the previous boots' logs first: one stick boot both reads the last test and applies the next change (no separate "save logs" boot). `LOCAL_AI=1` in gbos.cfg stops the AI prompts. Kernel changes go to
   **both** `/Volumes/EFI/EFI/BOOT/BOOTX64.EFI` (what the firmware boots) and `GBOS/EFI/BOOT/`.
 - The stick mounts on macOS as `/Volumes/EFI` and `/Volumes/GBOS`; the disk number changes. Eject with
   `diskutil eject` after `sync`.
