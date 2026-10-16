@@ -155,3 +155,17 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
 - 2026-10-16: dist/gbOS86-20261016.img rebuilt with kernel #32, usb/modules (396 modules), usb/firmware (~290 MB), hwdetect.sh,
   early_patch.sh (sha256 f20823e0…; 6.7 GB, 2.2 GB free on its GBOS partition). Not boot-tested. The Dell stick still has kernel #30
   until it is re-synced (copy usb/ -> stick incl. modules/ and firmware/, BOOTX64.EFI to both EFI copies).
+- 2026-10-16 AI features (Magic Pointer says "Gemini is not available at this moment"), from NVMe boot-19 (kernel #30, in stick boot-1/nvme-logs):
+  gPointer asks AICore for feature 713 (`AiCoreException ... 606-FEATURE_NOT_FOUND: Feature 713 is not available`), at boot and on every launch.
+  AICore (Play-updated, runs as uid 10107) never gets its feature manifest: `Failed to fetch manifest config ... Unable to resolve host
+  ondevicesafety-pa.googleapis.com` x55, then "Required labels are missing from the protected download manifest. Download will not be
+  triggered". The first tries (15:54:33) were before Wi-Fi came up (15:54:33.97), but 15:54:43/48/53 were 10-20 s after it validated, and
+  as.oss (10118, same Google AI stack) was online then, so it is not just "no network yet". The host resolves fine on a Mac. Cause undetermined:
+  AICore's uid (PCC-allowed package, `PccSandboxManagerInternal: Updated allowed PCC Packages ... com.google.android.aicore`) may be
+  network-blocked, or lacks INTERNET in netd's map. Nothing else on the device failed to resolve a host (only android.googleapis.com, pre-Wi-Fi).
+  Separate and unfixable here: Private Inference attestation (`AttestAndSign ... PERMISSION_DENIED`; keystore2 `HARDWARE_TYPE_UNAVAILABLE`
+  for the RKP IRPC x361, because Trusty KeyMint/RKP are hidden) and as.oss `PcsAi__enable_genai_inference_service` (AICore forwarding off).
+  Added `usb/aidiag.sh` + `gbos_aidiag`/`gbos_aidns_*` services in hook.sh: `logs/boot-N/ai-1.txt` (90 s) and `ai-2.txt` (4 min) with
+  ping-as-uid (10107 AICore, 10118 as.oss, 10119 as, 2000 shell), package/permission/gids dumps, connectivity/netpolicy/PCC state. Not yet run
+  on hardware. install.sh FILES and make_gbos86_image.sh ship aidiag.sh. The dev stick was re-made this day (GPT, EFI 200 MB + GBOS 30 GB;
+  mount the EFI partition with `sudo diskutil mount disk8s1`; the ESP image was written with dd so it keeps the EFI System type).

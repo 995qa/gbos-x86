@@ -106,6 +106,44 @@ on property:sys.boot_completed=1
     start gbos_audiodiag
     start gbos_wmsize
     start gbos_displaydiag
+    start gbos_aidiag
+
+# AI diagnostics (Magic Pointer / AICore): usb/aidiag.sh writes logs/boot-N/ai-1.txt (90 s) and ai-2.txt (4 min).
+# The gbos_aidns_* services run one ping per app uid so aidiag can compare DNS as AICore (10107) with
+# as.oss (10118), the Private Compute Services app that does reach Google.
+service gbos_aidiag /system/bin/sh /postinstall/gbos/aidiag.sh $N
+    user root
+    group root
+    seclabel u:r:shell:s0
+    oneshot
+
+service gbos_aidns_10107 /system/bin/sh -c "ping -c 2 -W 5 ondevicesafety-pa.googleapis.com > /dev/aidns_10107.txt 2>&1"
+    user 10107
+    group inet
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
+
+service gbos_aidns_10118 /system/bin/sh -c "ping -c 2 -W 5 ondevicesafety-pa.googleapis.com > /dev/aidns_10118.txt 2>&1"
+    user 10118
+    group inet
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
+
+service gbos_aidns_10119 /system/bin/sh -c "ping -c 2 -W 5 ondevicesafety-pa.googleapis.com > /dev/aidns_10119.txt 2>&1"
+    user 10119
+    group inet
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
+
+service gbos_aidns_2000 /system/bin/sh -c "ping -c 2 -W 5 ondevicesafety-pa.googleapis.com > /dev/aidns_2000.txt 2>&1"
+    user 2000
+    group inet
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
 
 # Logical display size (RESOLUTION in gbos.cfg); "reset" = native 1920x1080.
 service gbos_wmsize /system/bin/wm size $WMSIZE

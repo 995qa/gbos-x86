@@ -32,7 +32,7 @@ python3 "$U/make_super.py" "$STAGE/gbos/gbos/super.img" "$STAGE/gbos/gbos/super.
 echo "== files"
 cp "$U/out/BOOTX64.EFI" "$STAGE/efi/EFI/BOOT/BOOTX64.EFI"
 G=$STAGE/gbos/gbos
-for f in hook.sh early_patch.sh hwdetect.sh install.sh apex_patch.sh gbos.cfg crossystem bootdisk.img libkm_compat.so system_ext_manifest.xml soft_gk; do
+for f in hook.sh aidiag.sh early_patch.sh hwdetect.sh install.sh apex_patch.sh gbos.cfg crossystem bootdisk.img libkm_compat.so system_ext_manifest.xml soft_gk; do
   cp "$U/$f" "$G/$f"
 done
 for d in firmware patched audio installer kmod modules; do cp -R "$U/$d" "$G/$d"; done
