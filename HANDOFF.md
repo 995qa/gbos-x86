@@ -152,3 +152,6 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   `tools/fetch_firmware.sh` (linux-firmware d5455717 + sof-bin 2026.09.2, ~290 MB); iwlwifi files live at the firmware root
   (this kernel doesn't use the intel/iwlwifi/ prefix). Audio HAL config is generated for non-PCH cards (best effort).
   QEMU: ISA_EMU_TEST_PASS; `kernel/isa_emu_test/run_hwdetect.py` loaded e1000e/i2c_i801/rapl/wmi/video by modalias.
+- 2026-10-16: dist/gbOS86-20261016.img rebuilt with kernel #32, usb/modules (396 modules), usb/firmware (~290 MB), hwdetect.sh,
+  early_patch.sh (sha256 f20823e0…; 6.7 GB, 2.2 GB free on its GBOS partition). Not boot-tested. The Dell stick still has kernel #30
+  until it is re-synced (copy usb/ -> stick incl. modules/ and firmware/, BOOTX64.EFI to both EFI copies).
