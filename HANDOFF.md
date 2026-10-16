@@ -189,3 +189,14 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   read-only, copies the last N boots to the stick's boot-N/nvme-logs, powers off on Enter; seconds instead of Update's copy+verify of ~4 GB. `save_logs` (cp, falling
   back to dd conv=noerror,sync for FAT-truncated files) is also used by Update. A top-level menu key 4 was written for stage0 but dropped: the menu lives in the kernel's
   initramfs, so it needs a kernel rebuild (usb/make_initramfs.py reproduces #32's cpio byte for byte, so it would be an incremental relink). install.sh is a stick script, no kernel change.
+- 2026-10-16 **Wi-Fi fix CONFIRMED on hardware (NVMe boot-21, kernel #32):** `hwdetect: loaded iwlmvm (op_mode announced by iwlwifi)`, `devices after 0s: wifi=wlan0`.
+- 2026-10-16 **AI root cause (boot-21, Wi-Fi up, Magic Pointer tried): Google's server rejects AICore's feature-manifest request because there is no key attestation.**
+  Retire the earlier "AICore has no INTERNET" theory: AICore (user-0 pid) does reach ondevicesafety-pa.googleapis.com. After a first pre-network `Unable to resolve host`
+  (17:24:30), every attempt from 17:25:01 on fails with `ien: INVALID_ARGUMENT: Request contains an invalid argument`, immediately after as.oss (the gateway, pid 2876)
+  logs `AttestationClientImpl: Failed to generate key with ID attestation, retrying without it` (java.security.ProviderException: Failed to generate key pair). Cause:
+  keystore2 `Failed to get rpc for sec level TRUSTED_ENVIRONMENT: HARDWARE_TYPE_UNAVAILABLE` (115x in this boot): remote key provisioning has no IRemotelyProvisionedComponent
+  (Trusty KeyMint/RKP are hidden in hook.sh, software KeyMint serves keys but cannot attest). With no manifest, AICore registers no features: gPointer `Feature 713 is not
+  available`, notification summary `Feature 253`, ModelDownloadManager `Feature 2007`. The device identity is fine (ASUS/lapis, "ASUS Googlebook 14"). Same blocker as BSA
+  `AttestAndSign ... PERMISSION_DENIED`. Fixing it would need a Google-accepted hardware attestation chain; not possible on this laptop, and faking one is not something to build.
+  aidiag ping-as-uid results (user-0 uids 10107/10118/10119 "unknown host", shell 2000 fine) are an artifact: the foreground user is 10; test user-10 uids (1010107...) if this is revisited.
+  Cloud-only features (Gemini app chat, Search) do not depend on AICore. Not yet checked on hardware: whether the Gemini app itself answers.
