@@ -7,6 +7,12 @@ import android.os.IBinder;
 /** The fallback component clients bind when the multi-user one is unavailable: serves the core service directly. */
 public class AiCoreService extends Service {
     @Override
+    public void onCreate() {
+        super.onCreate();
+        gbos.localai.Entry.attach(this);
+    }
+
+    @Override
     public IBinder onBind(Intent intent) {
         return gbos.localai.Entry.core();
     }

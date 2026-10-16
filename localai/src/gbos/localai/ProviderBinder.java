@@ -10,7 +10,7 @@ import android.util.Log;
 final class ProviderBinder extends Binder {
     static final String DESC = "com.google.android.apps.aicore.aidl.IAiCoreServiceProvider";
     private static final String CALLBACK_DESC = "com.google.android.apps.aicore.aidl.IAiCoreServiceProviderCallback";
-    private static final String TAG = Llama.TAG;
+    private static final String TAG = Api.TAG;
 
     static final ProviderBinder INSTANCE = new ProviderBinder();
 

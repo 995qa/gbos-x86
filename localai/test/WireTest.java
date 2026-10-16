@@ -70,6 +70,14 @@ public class WireTest {
         check("temperature/topK/topP/maxTokens", r.temperature == 0.5f && r.topK == 40 && r.topP == 0.9f && r.maxTokens == 200, r.temperature + " " + r.topK + " " + r.topP + " " + r.maxTokens);
         check("stop tokens", r.stops.equals(Arrays.asList("STOP1")), String.valueOf(r.stops));
 
+        // a picture part: with a decoder the bitmap field becomes an image on a user message
+        Messages.imageDecoder = pp -> "data:image/jpeg;base64,TESTIMG";
+        Parcel pi = buildRequest(SENT);
+        pi.setDataPosition(0); pi.readInt();
+        Messages.Request ri = Messages.readRequest(pi);
+        check("image: decoder result attached, position still exact", ri.messages.size() == 3 && "data:image/jpeg;base64,TESTIMG".equals(ri.messages.get(2).image) && ri.messages.get(2).role == Messages.ROLE_USER && pi.readInt() == SENT, ri.messages.size() + " msgs");
+        Messages.imageDecoder = null;
+
         // result written by the service, read back with the reference reader
         Parcel q = new Parcel();
         q.writeInt(1);

@@ -215,14 +215,14 @@ on post-fs-data
     start gbos_sync
     start gbos_crashlog
 RC
-  # Optional local AI replacement for AICore (chosen in the installer, LOCAL_AI=1 in the installed gbos.cfg; localai/README.md).
-  # prep.sh (post-fs-data) binds a read-only copy of localai.apk (package com.google.android.aicore) over the system AICore
-  # stub, removes a Play-updated copy and the stale package-cache entry; gbos_llama runs the model server once the system
-  # is up. Diagnostics: logs/boot-N/localai.txt.
+  # Optional AI stand-in for AICore, answering through the user's own API key (chosen in the installer, LOCAL_AI=1 in the installed
+  # gbos.cfg; localai/README.md). prep.sh (post-fs-data) binds a read-only copy of localai.apk (package com.google.android.aicore)
+  # over the system AICore stub, gives the app its private copy of the API settings, and removes a Play-updated copy and the stale
+  # package-cache entry. Diagnostics: logs/boot-N/localai.txt.
   if [ "$LOCAL_AI" = 1 ]; then
     n=0
     # The APK itself is bound later, by prep.sh in post-fs-data: it needs a read-only copy on /data (not mounted yet here).
-    if [ -f $G/localai/localai.apk ] && [ -f $G/localai/llama-server ] && [ -f $G/localai/prep.sh ] && [ -f $G/localai/run.sh ] && [ -f $G/localai/diag.sh ]; then
+    if [ -f $G/localai/localai.apk ] && [ -f $G/localai/prep.sh ] && [ -f $G/localai/diag.sh ]; then
       for a in /new/product/priv-app/AICorePrebuilt*/*.apk; do [ -f "$a" ] && n=$((n+1)); done
     fi
     if [ $n -gt 0 ]; then
@@ -230,12 +230,6 @@ RC
 
 on post-fs-data
     exec u:r:shell:s0 root root -- /system/bin/sh /postinstall/gbos/localai/prep.sh
-
-service gbos_llama /system/bin/sh /postinstall/gbos/localai/run.sh
-    user shell
-    group shell inet
-    seclabel u:r:shell:s0
-    disabled
 
 service gbos_localaidiag /system/bin/sh /postinstall/gbos/localai/diag.sh $N
     user root
@@ -245,10 +239,9 @@ service gbos_localaidiag /system/bin/sh /postinstall/gbos/localai/diag.sh $N
     disabled
 
 on property:sys.boot_completed=1
-    start gbos_llama
     start gbos_localaidiag
 RC
-      log "hook: local AI replacement enabled (prep.sh binds gbos/localai/localai.apk over $n AICore apk in post-fs-data)"
+      log "hook: AI stand-in enabled (prep.sh binds gbos/localai/localai.apk over $n AICore apk in post-fs-data)"
     else
       log "hook: LOCAL_AI=1 but nothing to do (gbos/localai incomplete or no AICore apk under /product/priv-app)"
     fi

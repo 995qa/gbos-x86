@@ -36,8 +36,8 @@ for f in hook.sh aidiag.sh early_patch.sh hwdetect.sh install.sh apex_patch.sh g
   cp "$U/$f" "$G/$f"
 done
 for d in firmware patched audio installer kmod modules; do cp -R "$U/$d" "$G/$d"; done
-# Optional local AI replacement (localai/README.md): the APK, llama-server and scripts ship; the model and the patched Magic Pointer (Google's binary) never do.
-[ -f "$U/localai/localai.apk" ] && { cp -R "$U/localai" "$G/localai"; rm -f "$G/localai/model.gguf" "$G/localai/gpointer.apk"; }
+# Optional AI stand-in answering through the user's own API key (localai/README.md): the APK and scripts ship; the patched Magic Pointer (Google's binary), models and any api.conf never do.
+[ -f "$U/localai/localai.apk" ] && { cp -R "$U/localai" "$G/localai"; rm -f "$G/localai/gpointer.apk" "$G/localai/api.conf" "$G/localai"/*.gguf; }
 mkdir -p "$G/logs"
 # gbos.cfg ships with MODE=ask (the boot menu)
 grep -q '^MODE=ask$' "$G/gbos.cfg" || { echo "usb/gbos.cfg must have MODE=ask for the image"; exit 1; }

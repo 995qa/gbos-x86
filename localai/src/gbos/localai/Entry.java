@@ -6,6 +6,11 @@ import android.os.IBinder;
 public final class Entry {
     private Entry() {}
 
+    /** Called by the service classes so the settings file can be found in this app's private storage. */
+    public static void attach(android.content.Context c) {
+        Settings.attach(c);
+    }
+
     public static IBinder provider() {
         return ProviderBinder.INSTANCE;
     }

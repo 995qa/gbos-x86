@@ -22,6 +22,32 @@ else
   log -t gbos-localai "could not stage localai.apk in $S: the stock AICore stub stays"
 fi
 
+# --- API settings. The installer writes them to $S/api.conf (root-only: it holds the user's API key). The AICore app needs to read
+# them, so give it its own private copy in each Android user's device-protected storage, readable by that app uid only.
+# (Old local-model files from earlier versions are removed here too; the installer deletes them as well.)
+rm -f "$S/model.gguf" "$S/mmproj.gguf"
+if [ -f "$S/api.conf" ]; then
+  uid=$(awk '$1=="com.google.android.aicore"{print $2}' /data/system/packages.list 2>/dev/null)
+  case "$uid" in ''|*[!0-9]*) log -t gbos-localai "API settings NOT copied: no uid for com.google.android.aicore in packages.list" ;; *)
+    c=0
+    for d in /data/user_de/*; do
+      u=${d##*/}
+      case "$u" in ''|*[!0-9]*) continue;; esac
+      f="$d/com.google.android.aicore/files"
+      full=$((u*100000+uid))
+      if mkdir -p "$f" && cp "$S/api.conf" "$f/api.conf" && chown $full:$full "$f" "$f/api.conf" && chmod 700 "$f" && chmod 600 "$f/api.conf"; then
+        c=$((c+1))
+      else
+        log -t gbos-localai "API settings copy into $f FAILED"
+      fi
+    done
+    log -t gbos-localai "API settings copied for $c Android user(s) (provider host: $(sed -n 's#^BASE_URL=[a-z]*://\([^/:]*\).*#\1#p' "$S/api.conf" | head -n 1))" ;;
+  esac
+else
+  rm -f /data/user_de/*/com.google.android.aicore/files/api.conf
+  log -t gbos-localai "no API settings on this system (AI features will report not available)"
+fi
+
 # --- Optional: Magic Pointer patched to need only text queries (localai/patch_gpointer.py; the installer puts the file in $S).
 # Same three steps as for AICore. Only bound if the system copy has exactly the size of the build the patch was made from.
 GP="$S/gpointer.apk"

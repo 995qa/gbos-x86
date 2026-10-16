@@ -15,7 +15,16 @@ final class Messages {
     static final class Msg {
         int role, type;
         String text;
+        /** A picture as a data: URI (JPEG), when gPointer sent a bitmap and the decoder could read it. */
+        String image;
     }
+
+    /** Turns the Bitmap parcelable at the parcel's position into a data: URI. Set by the Android side; null in off-device tests. */
+    interface ImageDecoder {
+        String toDataUri(Parcel p);
+    }
+
+    static ImageDecoder imageDecoder;
 
     static final class Request {
         final List<Msg> messages = new ArrayList<>();
@@ -42,7 +51,8 @@ final class Messages {
                         int start = p.dataPosition();
                         Msg m = readMsg(p);
                         p.setDataPosition(start + len);
-                        if (m.type == TYPE_TEXT && m.text != null) r.messages.add(m);
+                        if (m.image != null) r.messages.add(m);
+                        else if (m.type == TYPE_TEXT && m.text != null) r.messages.add(m);
                         else r.skippedNonText++;
                     }
                     break;
@@ -74,6 +84,9 @@ final class Messages {
             switch (id) {
                 case 1: m.role = p.readInt(); break;
                 case 2: m.text = p.readString(); break;
+                case 3: // a Bitmap parcelable (the payload is Bitmap.writeToParcel)
+                    if (imageDecoder != null) m.image = imageDecoder.toDataUri(p);
+                    break;
                 case 4: m.type = p.readInt(); break;
                 default: break;
             }

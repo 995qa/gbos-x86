@@ -32,51 +32,109 @@ die() { halt_here "INSTALL FAILED: $*  (log: gbos/logs/boot-$N/install.log on th
 ask() { printf '%s' "$1" > $TTY; read -r REPLY < $TTY; echo "$1$REPLY" >> $L/install.log; }
 check() { a=$(sha256sum "$1" | cut -d' ' -f1); b=$(sha256sum "$2" | cut -d' ' -f1); [ "$a" = "$b" ] || die "verify failed: $2"; echo "ok $a $2" >> $L/install.log; }
 
-# Optional local AI replacement for Google's AICore (the stock one needs hardware attestation this laptop can't do).
-# Asked on every install and every update. LOCAL_AI=1/0 in the stick's gbos.cfg answers without asking; a test run
-# with gbos_install_confirm= on the kernel command line never asks and says no. Yes needs gbos/localai/localai.apk
-# and llama-server on the stick, plus model.gguf there or already on the installed system. No removes it again.
+# Optional AI stand-in for Google's AICore (the stock one needs hardware attestation this laptop can't do): Magic Pointer and
+# friends answer through an API the USER provides (an OpenAI-compatible chat API: address, key, model). Asked on every install and
+# every update. LOCAL_AI=1/0 in the stick's gbos.cfg answers without asking (1 needs API settings already on the SSD or on the stick);
+# a test run with gbos_install_confirm= on the kernel command line never asks and says no. No removes it again. The older
+# local-model version's files (model, llama-server) are ALWAYS deleted from the SSD here.
+# The API key is typed with echo off and never goes to install.log (ask_secret below does not log), the screen or git.
 # localai_step MOUNTED_GBOSSYS DATA_PARTITION: sets LOCAL_AI to what the installed gbos.cfg should say.
+ask_secret() { printf '%s' "$1" > $TTY; stty -echo < $TTY 2>/dev/null; read -r REPLY < $TTY; stty echo < $TTY 2>/dev/null; echo > $TTY; }
+trim() { printf '%s' "$1" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'; }
+conf_get() { sed -n "s/^$2=//p" "$1" 2>/dev/null | head -n 1 | tr -d '\r'; }
+# api_problem URL MODEL KEY: prints what is wrong (never the key) and returns 1, or returns 0.
+api_problem() {
+  [ -n "$1" ] || { echo "the API address is empty"; return 1; }
+  [ -n "$2" ] || { echo "the model name is empty"; return 1; }
+  [ -n "$3" ] || { echo "the API key is empty"; return 1; }
+  case "$1" in
+    https://*) ;;
+    http://localhost*|http://127.*|http://10.*|http://192.168.*|http://172.1[6-9].*|http://172.2[0-9].*|http://172.3[01].*) ;;
+    *) echo "the address must start with https:// (http:// only for a server on this machine or your own network)"; return 1;;
+  esac
+  return 0
+}
+# api_write FILE URL MODEL KEY CAP: root-only (it holds the key).
+api_write() { ( umask 077; printf 'BASE_URL=%s\nMODEL=%s\nAPI_KEY=%s\nMAX_PER_HOUR=%s\n' "$2" "$3" "$4" "$5" > "$1.new" ) && chmod 600 "$1.new" && mv -f "$1.new" "$1"; }
+
 localai_step() {
-  _sys=$1; _data=$2; _ans=$LOCAL_AI
+  _sys=$1; _data=$2; _ans=$LOCAL_AI; _cfgans=$LOCAL_AI   # _cfgans: what gbos.cfg pre-answered (LOCAL_AI itself is reset below)
   _conf=$(sed -n 's/.*gbos_install_confirm=\([^ ]*\).*/\1/p' /proc/cmdline)
+  mkdir -p /mnt/ndata
+  _mounted=0; mount -t ext4 "$_data" /mnt/ndata 2>/dev/null && _mounted=1
+  # Leftovers of the local-model version (about 4 GB): gone on every install/update, whatever is answered below.
+  if [ $_mounted = 1 ]; then rm -f /mnt/ndata/gbos-localai/model.gguf /mnt/ndata/gbos-localai/mmproj.gguf; fi
+  rm -f "$_sys/gbos/localai/llama-server" "$_sys/gbos/localai/run.sh"
+  A=/mnt/ndata/gbos-localai/api.conf
   if [ -z "$_ans" ]; then
     if [ -n "$_conf" ]; then _ans=0; else
       say ""
-      say "Optional: local AI replacement. Magic Pointer suggestions run on a model on this laptop's CPU instead of Google's"
-      say "servers (which refuse this laptop). Needs about 3.4 GB on the SSD and is slow on this CPU. Answering n removes it."
-      ask "Install or keep the local AI replacement? [y/N] "
+      say "Optional: AI features (Magic Pointer) through an API YOU provide. Google's own servers refuse this laptop, so the text and"
+      say "pictures you point at would be sent to the provider whose address and key you enter (a Gemini API key works, or any"
+      say "OpenAI-compatible service). Needs Wi-Fi and counts against your key's quota. Answering n removes it and any saved key."
+      ask "Use an API for the AI features? [y/N] "
       case "$REPLY" in y|Y|yes|YES) _ans=1;; *) _ans=0;; esac
     fi
   fi
-  mkdir -p /mnt/ndata
   if [ "$_ans" != 1 ]; then
-    if mount -t ext4 "$_data" /mnt/ndata 2>/dev/null; then rm -rf /mnt/ndata/gbos-localai; umount /mnt/ndata; fi
-    rm -rf "$_sys/gbos/localai"; LOCAL_AI=0; say "Local AI replacement: off"; return 0
+    [ $_mounted = 1 ] && { rm -rf /mnt/ndata/gbos-localai; umount /mnt/ndata; }
+    rm -rf "$_sys/gbos/localai"; LOCAL_AI=0; say "AI features through an API: off (saved key and AI files removed)"; return 0
   fi
   LOCAL_AI=0
-  _lf="localai.apk llama-server prep.sh run.sh diag.sh"   # everything hook.sh and the init services run
+  _lf="localai.apk prep.sh diag.sh"   # everything hook.sh and the init services run
   for f in $_lf; do
-    [ -f $G/localai/$f ] || { say "Local AI replacement skipped: gbos/localai/$f is not on the stick"; return 0; }
+    [ -f $G/localai/$f ] || { [ $_mounted = 1 ] && umount /mnt/ndata; say "AI features skipped: gbos/localai/$f is not on the stick"; return 0; }
   done
-  mount -t ext4 "$_data" /mnt/ndata 2>/dev/null || { say "Local AI replacement skipped: cannot mount $_data"; return 0; }
-  mkdir -p /mnt/ndata/gbos-localai
-  M=/mnt/ndata/gbos-localai/model.gguf
-  if [ -f $G/localai/model.gguf ]; then
-    _need=$(( $(stat -c %s $G/localai/model.gguf) / 1048576 + 300 ))
-    _have=$(df -m /mnt/ndata | awk 'NR==2{print $4}')
-    if [ -f $M ] && [ "$(stat -c %s $M)" = "$(stat -c %s $G/localai/model.gguf)" ]; then
-      say "  model already on the SSD"
-    elif [ "$_have" -lt "$_need" ]; then
-      umount /mnt/ndata; say "Local AI replacement skipped: needs $_need MB free on the SSD, has $_have MB"; return 0
+  [ $_mounted = 1 ] || { say "AI features skipped: cannot mount $_data"; return 0; }
+  mkdir -p /mnt/ndata/gbos-localai; chmod 755 /mnt/ndata/gbos-localai
+
+  # --- API settings: a file on the stick wins (prepare gbos/localai/api.conf on a computer, then delete it from the stick afterwards),
+  # else keep what is on the SSD if the user agrees, else ask on this screen.
+  _have_cfg=0
+  if [ -f $G/localai/api.conf ]; then
+    _u=$(trim "$(conf_get $G/localai/api.conf BASE_URL)"); _m=$(trim "$(conf_get $G/localai/api.conf MODEL)")
+    _k=$(trim "$(conf_get $G/localai/api.conf API_KEY)"); _c=$(trim "$(conf_get $G/localai/api.conf MAX_PER_HOUR)")
+    if _why=$(api_problem "$_u" "$_m" "$_k"); then
+      if api_write $A "$_u" "$_m" "$_k" "${_c:-120}"; then
+        _have_cfg=1; say "  API settings imported from gbos/localai/api.conf on the stick (delete that file from the stick if you don't want your key there)"
+      else
+        say "  could not save the API settings from the stick"
+      fi
     else
-      say "  copying the model ($(( $(stat -c %s $G/localai/model.gguf) / 1048576 )) MiB) ..."
-      cp $G/localai/model.gguf $M.part && mv $M.part $M || { rm -f $M.part; umount /mnt/ndata; say "Local AI replacement skipped: copying the model failed"; return 0; }
+      say "  gbos/localai/api.conf on the stick is not usable: $_why"
     fi
-  elif [ ! -f $M ]; then
-    umount /mnt/ndata; say "Local AI replacement skipped: no gbos/localai/model.gguf on the stick or the SSD"; return 0
+    _k=
   fi
-  # Optional: Magic Pointer patched to need only text queries (localai/build_gpointer.sh, ~235 MB, Google's app so never shipped
+  if [ $_have_cfg = 0 ] && [ -f $A ]; then
+    _u=$(conf_get $A BASE_URL)
+    if api_problem "$_u" "$(conf_get $A MODEL)" "$(conf_get $A API_KEY)" > /dev/null; then
+      if [ -n "$_cfgans" ]; then
+        _have_cfg=1   # answered by gbos.cfg: keep what is saved
+      else
+        say "  Current API settings: $_u , model $(conf_get $A MODEL) (key saved)"
+        ask "  Keep them? [Y/n] "
+        case "$REPLY" in n|N|no|NO) ;; *) _have_cfg=1;; esac
+      fi
+    fi
+  fi
+  _try=0
+  while [ $_have_cfg = 0 ] && [ $_try -lt 3 ]; do
+    _try=$((_try+1))
+    ask "  API address [https://generativelanguage.googleapis.com/v1beta/openai]: "; _u=$(trim "$REPLY"); [ -n "$_u" ] || _u=https://generativelanguage.googleapis.com/v1beta/openai
+    ask "  Model name (e.g. gemini-2.5-flash, as your provider names it): "; _m=$(trim "$REPLY")
+    ask_secret "  API key (typed, not shown): "; _k=$(trim "$REPLY")
+    ask "  Max AI requests per hour [120]: "; _c=$(trim "$REPLY"); case "$_c" in ''|*[!0-9]*) _c=120;; esac
+    if _why=$(api_problem "$_u" "$_m" "$_k"); then
+      api_write $A "$_u" "$_m" "$_k" "$_c" && _have_cfg=1 || say "  could not save the settings"
+    else
+      say "  Not saved: $_why. Try again."
+    fi
+    _k=
+  done
+  if [ $_have_cfg = 0 ]; then umount /mnt/ndata; say "AI features skipped: no usable API settings were entered"; return 0; fi
+  chmod 600 $A
+
+  # --- Optional: Magic Pointer patched to need only text queries (localai/build_gpointer.sh, ~235 MB, Google's app so never shipped
   # in the image). Lives on the data partition as a read-only file that prep.sh binds over the system copy.
   P=/mnt/ndata/gbos-localai/gpointer.apk
   if [ -f $G/localai/gpointer.apk ]; then
@@ -95,15 +153,13 @@ localai_step() {
   fi
   rm -rf "$_sys/gbos/localai"; mkdir -p "$_sys/gbos/localai"
   for f in $_lf; do
-    cp $G/localai/$f "$_sys/gbos/localai/" || { umount /mnt/ndata; say "Local AI replacement skipped: copying $f failed"; return 0; }
+    cp $G/localai/$f "$_sys/gbos/localai/" || { umount /mnt/ndata; say "AI features skipped: copying $f failed"; return 0; }
   done
-  chmod 644 $M; chmod 755 /mnt/ndata/gbos-localai
   sync; echo 3 > /proc/sys/vm/drop_caches
-  [ -f $G/localai/model.gguf ] && { say "  verifying the model ..."; check $G/localai/model.gguf $M; }
   [ -f $G/localai/gpointer.apk ] && [ -f $P ] && check $G/localai/gpointer.apk $P
   for f in $_lf; do check $G/localai/$f "$_sys/gbos/localai/$f"; done
   umount /mnt/ndata
-  LOCAL_AI=1; say "Local AI replacement: on"
+  LOCAL_AI=1; say "AI features through your API: on (provider $(printf '%s' "$_u" | sed 's#^[a-z]*://\([^/:]*\).*#\1#'))"
 }
 # Write the installed system's gbos.cfg from the stick's: boots normally, remembers the local AI answer.
 write_installed_cfg() {

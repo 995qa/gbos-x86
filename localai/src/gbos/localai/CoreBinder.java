@@ -13,7 +13,7 @@ import android.util.Log;
  */
 final class CoreBinder extends Binder {
     static final String DESC = "com.google.android.apps.aicore.aidl.IAICoreService";
-    private static final String TAG = Llama.TAG;
+    private static final String TAG = Api.TAG;
 
     /** gPointer needs >= 7 for the Legion (server model) path. */
     static final int API_VERSION = 8;
