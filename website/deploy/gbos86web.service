@@ -1,0 +1,25 @@
+[Unit]
+Description=gbos86.com site and forum (loopback only, fronted by Cloudflare)
+After=network.target
+
+[Service]
+Type=simple
+User=gbos86web
+Group=gbos86web
+WorkingDirectory=/var/www/gbos86
+Environment=GBOS_BIND=127.0.0.1:8083
+Environment=GBOS_DATA=/var/www/gbos86/data
+Environment=GBOS_BASE=https://gbos86.com
+EnvironmentFile=-/etc/gbos86web.env
+ExecStart=/usr/bin/python3 /var/www/gbos86/app.py
+Restart=on-failure
+RestartSec=5
+MemoryMax=200M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/gbos86/data
+
+[Install]
+WantedBy=multi-user.target

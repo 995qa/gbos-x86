@@ -4,9 +4,12 @@ Google's **Googlebook OS** (the `lapis` Android desktop build) running on an ord
 **Dell Latitude 5300** (Intel i5-8365U "Whiskey Lake", UHD 620, 16 GB). It boots from a USB stick or
 from the internal NVMe, reaches the desktop, and runs Play Store apps.
 
-> **Keep this repository private.** `usb/patched/` and `usb/libkm_compat.so` are modified copies of
-> Google's proprietary libraries. The OS images themselves are not in the repo (they are GBs and
-> Google's); you rebuild them from Google's official recovery download.
+**Website and community:** https://gbos86.com (guides, hardware list, forum) | Discord: https://discord.gg/h9AD9fSnDT
+
+> `usb/patched/` and `usb/libkm_compat.so` are modified copies of Google's proprietary libraries, included
+> because the build needs them; Google's terms apply to them. The OS images themselves are not in the repo (they are
+> GBs and Google's); you rebuild them from Google's official recovery download. gbOS86 is an independent project, not
+> affiliated with or endorsed by Google.
 
 ## Status
 
@@ -133,7 +136,7 @@ suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not c
 | `tools/make_gbos86_image.sh` | builds the flashable gbOS86 USB image into `dist/` |
 | `usb/audio/` | audio HAL config for the HDA card |
 | `usb/out/BOOTX64.EFI` | **current kernel** (build #30: #29 + gbOS86 boot menu), boots directly from UEFI |
-| `usb/patched/`, `usb/libkm_compat.so` | patched Google libraries (private) |
+| `usb/patched/`, `usb/libkm_compat.so` | patched Google libraries |
 | `usb/kmod/` | `btusb`, `btintel`, `btrtl` built for kernel #29 |
 | `usb/installer/` | Alpine `sfdisk`/`mke2fs`/`e2fsck`/`mkfs.fat`/`blkid` + musl (`tools/fetch_installer_tools.sh`) |
 | `usb/firmware/` | Intel Wi-Fi + Bluetooth firmware, `regulatory.db` |

@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily gbos86.com database snapshot
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

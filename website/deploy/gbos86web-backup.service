@@ -1,0 +1,9 @@
+[Unit]
+Description=gbos86.com database snapshot
+
+[Service]
+Type=oneshot
+User=gbos86web
+Group=gbos86web
+Environment=GBOS_DATA=/var/www/gbos86/data
+ExecStart=/usr/bin/python3 /var/www/gbos86/app.py backup

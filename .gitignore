@@ -21,8 +21,8 @@
 #   usb/out/BOOTX64.EFI   current kernel + stage0 initramfs
 #   usb/kmod/*.ko         Bluetooth modules
 #   usb/installer/        Alpine partitioning tools (tools/fetch_installer_tools.sh)
-#   usb/patched/*.so      patched Google libraries (libz, libcrypto): keep this repo PRIVATE
-#   usb/libkm_compat.so   patched Google library: keep this repo PRIVATE
+#   usb/patched/*.so      patched Google libraries (libz, libcrypto)
+#   usb/libkm_compat.so   patched Google library
 #   usb/soft_gk           software Gatekeeper
 #   usb/firmware/         Intel Wi-Fi/Bluetooth firmware (linux-firmware) + regulatory.db
 /usb/out/*
@@ -51,3 +51,6 @@ __pycache__/
 /usb/modules/
 /usb/firmware/iwlwifi-*
 !/usb/firmware/iwlwifi-9000-pu-b0-jf-b0-46.ucode
+
+# website runtime data
+/website/data/
