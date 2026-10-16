@@ -214,3 +214,36 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   and `ibt-0040-2120 -> 0040-1020`. `fetch_firmware.sh` now copies the target for each WHENCE Link whose target we ship (FAT has no symlinks). Local `usb/firmware/intel` has the six
   files; stick fix for the reporter = `dist/gbos-bt-fix-ibt-0040-1050.zip` (merge into the stick's `gbos/`, then Update). Firmware is not in git: a permanent fix needs a new firmware
   release (v34) and `build.sh` pointing at it. Other Links (not only Bluetooth) are now picked up on the next full fetch; not yet re-run (needs the 1.5 GB linux-firmware clone). Not verified on hardware.
+- 2026-10-16 **Local AI replacement for AICore (new, optional; `localai/`, not yet booted on hardware).** Since Google's servers refuse AICore without
+  key attestation (entry above), `localai/` builds a stand-in with package `com.google.android.aicore` (APK, ~20 KB) that answers gPointer's binder calls
+  and runs **Gemma 4 E2B** (official QAT q4_0 GGUF, 3.35 GB) through `llama-server` (llama.cpp v0.7.0, Android x86_64, AVX2 only). Protocol read from gPointer's
+  own client code (jadx in docker; the Mac's Homebrew Java 17 crashes with SIGBUS, use docker): bind `…service.multiuser.AiCoreMultiUserService` → provider →
+  `IAICoreService` (apiVersion >= 7, `getFeatureOrControl(713,1)`, status 3, `getLLMLegionService`) → `runCancellableInferenceWithInfo`. Feature 713 is the
+  Legion server model. gPointer sends its 14 KB instruction prompt as a system message plus "with OCR text: '…'" per selected area (image-only regions are
+  bitmaps, which the text-only service ignores) and splits the reply on newline then tab, so `Chips.java` repairs the format.
+  Installer: `usb/install.sh` asks **on every install and update** ("Install or keep the local AI replacement? [y/N]"; n removes it); yes copies the APK/server
+  to GBOSSYS `gbos/localai/` and the model to `/data/gbos-localai/model.gguf` (not enough room next to super.img) and sets `LOCAL_AI=1` in the installed gbos.cfg.
+  `hook.sh` then bind-mounts the APK over `/product/priv-app/AICorePrebuilt*/`, `usb/localai/prep.sh` removes a Play-updated AICore from `/data/app` in post-fs-data,
+  `run.sh` starts the server at boot_completed, `diag.sh` writes `logs/boot-N/localai.txt` (package state, services, our logcat). Tested off-hardware only:
+  model + real prompt in docker (cold 23 s on an M-series Mac, ~1 s once the prompt prefix is cached), chip-format unit tests, wire format vs Google's SafeParcel code.
+  **First thing to check on the laptop:** `pm path com.google.android.aicore` in localai.txt must be our APK (if a Play-updated copy still wins, fix `prep.sh`;
+  PackageManager's handling of a system package with a changed signature is unverified). Put `model.gguf` in the stick's `gbos/localai/` before choosing yes
+  (`localai/fetch_model.sh`). Build: `localai/fetch_toolchain.sh`, `build_apk.sh`, `build_llama.sh` (all docker).
+- 2026-10-16 **Local AI, boot 26: AICore side works; Magic Pointer then exits on its RobinKit capability check; gPointer patch added (not yet booted).** prep.sh (read-only APK on /data bound over the
+  AICore stub + Play update removed + package-cache entry removed) made PackageManager use our APK; gPointer logged `Successfully prepared PrivateInferenceService features`, our service answered
+  getFeatureOrControl(713)/getFeatureStatus/getLLMLegionService for users 0 and 10. Earlier failures, all fixed: scripts not copied by the installer (exit 127), "Writable dex file is not allowed" (FAT
+  files are world-writable; ART refuses), stale PackageManager parse cache of the stub (`AiCoreMultiUserService: not found`), and a /tmp source file deleted at switch_root (apps got ENOENT).
+  New blocker: `gPointer/MainActivity: RobinKit capability check failed for returning user` = Gemini app offers only TEXT_QUERY, gPointer requires TEXT_QUERY + TEXT_QUERY_WITH_ATTACHMENTS
+  (`ErrorsKt.requiredCapabilities`, one use: `containsAll`). `localai/patch_gpointer.py` (1 byte + dex/zip checksums, signature block untouched) + `localai/build_gpointer.sh`;
+  installer/prep.sh/diag.sh extended. The running gPointer on the SSD is a Play-updated split APK (26091600), so prep.sh removes it to fall back to the patched system copy.
+  Check next: `pm path`/package state for gpointer in localai.txt (does PackageManager accept the unverified signature?), RobinKit lines, then whether our service logs `inference:`.
+- 2026-10-16 **Local AI, boot 29: the patched Magic Pointer runs (PackageManager accepted the APK with Google's signature block left unverifiable; Gemini app logs "Robin is eligible and opted-in"), user reached the "ask Gemini" send; our service then got its first real inference request and rejected it.**
+  Cause: my parcel reader took `p.dataPosition() + sizeOf(p, h)` with the position read BEFORE the size int (Java evaluates left to right), so every big-field/object end was 4 bytes short; the callback binder after the request read as null
+  (`IllegalArgumentException: null request or callback`, transaction 6). Fixed with `Wire.endOf`; `localai/test.sh` now round-trips a realistic request/result/feature through a stand-in Parcel and a reference reader written from gPointer's SafeParcel code
+  (verified to fail on the old code). Noted for later: `gPointer/OcrTextRecog: NPU compilation failed` (selections may then arrive as bitmaps only, which the text-only model can't read).
+- 2026-10-16 **Local AI: vision measured, deliberately NOT enabled (branch `local-ai`).** Gemma 4 E2B is multimodal and Google's repo ships the projector (`gemma-4-E2B-it-mmproj.gguf`, 986,833,664 bytes, sha256 021059cc…eb14; llama.cpp v0.7.0 has the GEMMA4V projector and
+  `--mmproj`/`--image-max-tokens`). Measured in docker on an M2 Pro (4 threads, CPU only), gPointer's real prompt + a 900x1599 photo: text only cold 23 s; with an image at 70 / 140 / 280 image tokens: 45 / 63 / 112 s cold (the image step is ~22 / 40 / 88 s;
+  it scales with detail), later requests with the same image ~1 s. The i5-8365U is estimated 3 to 5x slower, so an image request would take minutes, close to gPointer's 240 s limit. To enable later: decode LLMMessage field 3 (a Bitmap parcelable, type 1)
+  in `Messages`, shrink it, send it as an `image_url` data URI (merge consecutive same-role messages first), start `llama-server` with `-mm /data/gbos-localai/mmproj.gguf --image-max-tokens 70`, and have the installer copy the 0.99 GB file.
+  gPointer sends text when its OCR works (`OcrTextRecog: NPU compilation failed` was logged, so check whether selections arrive as bitmaps) and a bitmap only for image regions.
+  Gboard (`LatinIMEGoogleDesktopPrebuilt`) also uses AICore: `ILLMService`, `IMagicRewriteService`, `ITextEmbeddingService` (flag `writing_tools_pi_aicore_feature_id_override`); our stand-in implements only the LLM service.

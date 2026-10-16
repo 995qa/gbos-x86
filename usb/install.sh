@@ -32,6 +32,85 @@ die() { halt_here "INSTALL FAILED: $*  (log: gbos/logs/boot-$N/install.log on th
 ask() { printf '%s' "$1" > $TTY; read -r REPLY < $TTY; echo "$1$REPLY" >> $L/install.log; }
 check() { a=$(sha256sum "$1" | cut -d' ' -f1); b=$(sha256sum "$2" | cut -d' ' -f1); [ "$a" = "$b" ] || die "verify failed: $2"; echo "ok $a $2" >> $L/install.log; }
 
+# Optional local AI replacement for Google's AICore (the stock one needs hardware attestation this laptop can't do).
+# Asked on every install and every update. LOCAL_AI=1/0 in the stick's gbos.cfg answers without asking; a test run
+# with gbos_install_confirm= on the kernel command line never asks and says no. Yes needs gbos/localai/localai.apk
+# and llama-server on the stick, plus model.gguf there or already on the installed system. No removes it again.
+# localai_step MOUNTED_GBOSSYS DATA_PARTITION: sets LOCAL_AI to what the installed gbos.cfg should say.
+localai_step() {
+  _sys=$1; _data=$2; _ans=$LOCAL_AI
+  _conf=$(sed -n 's/.*gbos_install_confirm=\([^ ]*\).*/\1/p' /proc/cmdline)
+  if [ -z "$_ans" ]; then
+    if [ -n "$_conf" ]; then _ans=0; else
+      say ""
+      say "Optional: local AI replacement. Magic Pointer suggestions run on a model on this laptop's CPU instead of Google's"
+      say "servers (which refuse this laptop). Needs about 3.4 GB on the SSD and is slow on this CPU. Answering n removes it."
+      ask "Install or keep the local AI replacement? [y/N] "
+      case "$REPLY" in y|Y|yes|YES) _ans=1;; *) _ans=0;; esac
+    fi
+  fi
+  mkdir -p /mnt/ndata
+  if [ "$_ans" != 1 ]; then
+    if mount -t ext4 "$_data" /mnt/ndata 2>/dev/null; then rm -rf /mnt/ndata/gbos-localai; umount /mnt/ndata; fi
+    rm -rf "$_sys/gbos/localai"; LOCAL_AI=0; say "Local AI replacement: off"; return 0
+  fi
+  LOCAL_AI=0
+  _lf="localai.apk llama-server prep.sh run.sh diag.sh"   # everything hook.sh and the init services run
+  for f in $_lf; do
+    [ -f $G/localai/$f ] || { say "Local AI replacement skipped: gbos/localai/$f is not on the stick"; return 0; }
+  done
+  mount -t ext4 "$_data" /mnt/ndata 2>/dev/null || { say "Local AI replacement skipped: cannot mount $_data"; return 0; }
+  mkdir -p /mnt/ndata/gbos-localai
+  M=/mnt/ndata/gbos-localai/model.gguf
+  if [ -f $G/localai/model.gguf ]; then
+    _need=$(( $(stat -c %s $G/localai/model.gguf) / 1048576 + 300 ))
+    _have=$(df -m /mnt/ndata | awk 'NR==2{print $4}')
+    if [ -f $M ] && [ "$(stat -c %s $M)" = "$(stat -c %s $G/localai/model.gguf)" ]; then
+      say "  model already on the SSD"
+    elif [ "$_have" -lt "$_need" ]; then
+      umount /mnt/ndata; say "Local AI replacement skipped: needs $_need MB free on the SSD, has $_have MB"; return 0
+    else
+      say "  copying the model ($(( $(stat -c %s $G/localai/model.gguf) / 1048576 )) MiB) ..."
+      cp $G/localai/model.gguf $M.part && mv $M.part $M || { rm -f $M.part; umount /mnt/ndata; say "Local AI replacement skipped: copying the model failed"; return 0; }
+    fi
+  elif [ ! -f $M ]; then
+    umount /mnt/ndata; say "Local AI replacement skipped: no gbos/localai/model.gguf on the stick or the SSD"; return 0
+  fi
+  # Optional: Magic Pointer patched to need only text queries (localai/build_gpointer.sh, ~235 MB, Google's app so never shipped
+  # in the image). Lives on the data partition as a read-only file that prep.sh binds over the system copy.
+  P=/mnt/ndata/gbos-localai/gpointer.apk
+  if [ -f $G/localai/gpointer.apk ]; then
+    _gs=$(stat -c %s $G/localai/gpointer.apk)
+    if [ -f $P ] && [ "$(stat -c %s $P)" = "$_gs" ] && cmp -s $G/localai/gpointer.apk $P; then
+      say "  patched Magic Pointer already on the SSD"
+    elif [ "$(df -m /mnt/ndata | awk 'NR==2{print $4}')" -lt $(( _gs / 1048576 + 100 )) ]; then
+      say "  patched Magic Pointer skipped: not enough free space on the SSD"; rm -f $P
+    else
+      say "  copying the patched Magic Pointer ($(( _gs / 1048576 )) MiB) ..."
+      rm -f $P; cp $G/localai/gpointer.apk $P.part && mv $P.part $P || { rm -f $P.part $P; say "  patched Magic Pointer: copy failed, skipped"; }
+    fi
+    [ -f $P ] && chmod 444 $P
+  else
+    rm -f $P
+  fi
+  rm -rf "$_sys/gbos/localai"; mkdir -p "$_sys/gbos/localai"
+  for f in $_lf; do
+    cp $G/localai/$f "$_sys/gbos/localai/" || { umount /mnt/ndata; say "Local AI replacement skipped: copying $f failed"; return 0; }
+  done
+  chmod 644 $M; chmod 755 /mnt/ndata/gbos-localai
+  sync; echo 3 > /proc/sys/vm/drop_caches
+  [ -f $G/localai/model.gguf ] && { say "  verifying the model ..."; check $G/localai/model.gguf $M; }
+  [ -f $G/localai/gpointer.apk ] && [ -f $P ] && check $G/localai/gpointer.apk $P
+  for f in $_lf; do check $G/localai/$f "$_sys/gbos/localai/$f"; done
+  umount /mnt/ndata
+  LOCAL_AI=1; say "Local AI replacement: on"
+}
+# Write the installed system's gbos.cfg from the stick's: boots normally, remembers the local AI answer.
+write_installed_cfg() {
+  grep -v -e '^MODE=' -e '^ACTION=' -e '^LOCAL_AI=' $G/gbos.cfg > /mnt/nsys/gbos/gbos.cfg
+  echo 'MODE=boot' >> /mnt/nsys/gbos/gbos.cfg; echo "LOCAL_AI=${LOCAL_AI:-0}" >> /mnt/nsys/gbos/gbos.cfg
+}
+
 chvt 1 2>/dev/null
 clear > $TTY 2>/dev/null
 say "=============================================================="
@@ -93,8 +172,9 @@ if [ "${ACTION:-install}" = update ]; then
   for f in $FILES; do cmp -s $G/$f /mnt/nsys/gbos/$f || { say "  $f"; cp $G/$f /mnt/nsys/gbos/$f || die "copy $f failed"; }; done
   for d in $DIRS; do rm -rf /mnt/nsys/gbos/$d; cp -r $G/$d /mnt/nsys/gbos/ || die "copy $d/ failed"; done
   cmp -s $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI || { say "  kernel"; cp $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI || die "copy kernel failed"; }
+  localai_step /mnt/nsys "$NDATA"
   # Settings such as DENSITY follow the stick; the installed copy always boots normally.
-  grep -v -e '^MODE=' -e '^ACTION=' $G/gbos.cfg > /mnt/nsys/gbos/gbos.cfg && echo 'MODE=boot' >> /mnt/nsys/gbos/gbos.cfg
+  write_installed_cfg
   sync; echo 3 > /proc/sys/vm/drop_caches
   say "Verifying ..."
   check $KERNEL /mnt/nefi/EFI/BOOT/BOOTX64.EFI
@@ -184,7 +264,8 @@ for f in $FILES; do cp $G/$f /mnt/nsys/gbos/$f || die "copy $f failed"; done
 for d in $DIRS; do cp -r $G/$d /mnt/nsys/gbos/ || die "copy $d/ failed"; done
 cp /gbos/busybox /mnt/nsys/busybox 2>/dev/null
 # The installed system boots normally and can't re-run the installer.
-grep -v -e '^MODE=' -e '^ACTION=' $G/gbos.cfg > /mnt/nsys/gbos/gbos.cfg; echo 'MODE=boot' >> /mnt/nsys/gbos/gbos.cfg
+localai_step /mnt/nsys ${P}4
+write_installed_cfg
 sync; echo 3 > /proc/sys/vm/drop_caches
 
 say "Verifying ..."

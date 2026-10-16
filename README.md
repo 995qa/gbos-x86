@@ -52,6 +52,7 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 | Night Light | Gamma tables from userspace are ignored (that's the colour fix), so it has no effect |
 | Linux Terminal (AVF) | Secretkeeper hang fixed; VM boot not yet confirmed |
 | Auth-bound keystore keys | `soft_gk`'s auth tokens aren't trusted by the software KeyMint |
+| Google's on-device AI (Magic Pointer, AICore) | Google's servers refuse it without hardware key attestation, which no non-Google laptop can provide. Optional replacement that runs Gemma 4 E2B on the laptop's CPU, chosen in the installer: see [`localai/README.md`](localai/README.md) (**experimental, not yet confirmed on hardware**) |
 | OS updates | Built-in OTA can't work; manual process only (see "Updating Googlebook OS") |
 | Other laptops | Only the Latitude 5300 is tested. The CPU-emulation kernel should help any pre-2021 Intel CPU |
 

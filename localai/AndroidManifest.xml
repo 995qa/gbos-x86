@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  gbOS86 local AI: stands in for Google's AICore (package com.google.android.aicore) and answers its clients with a
+  model running on this laptop (llama-server, started by init). It takes over AICore's package name and service
+  class names because clients bind those explicitly. It does not contact Google.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.google.android.aicore"
+    android:versionCode="1000001"
+    android:versionName="gbos-localai-0.1">
+
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="35" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Clients (gPointer) request this normal permission; AICore defines it. -->
+    <permission android:name="com.google.android.apps.aicore.service.BIND_SERVICE" />
+
+    <application
+        android:label="gbOS86 local AI"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="true">
+
+        <service
+            android:name="com.google.android.apps.aicore.service.multiuser.AiCoreMultiUserService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.apps.aicore.service.BIND_SERVICE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name="com.google.android.apps.aicore.service.AiCoreService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.apps.aicore.service.BIND_SERVICE" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>
