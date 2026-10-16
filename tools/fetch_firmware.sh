@@ -26,7 +26,7 @@ g() { grep "$@" $W/all.txt || true; }
   g -E '^intel/(sof|sof-ipc4|sof-ace-tplg|sof-tplg)'
   # Realtek Wi-Fi/BT
   g -E '^rtw88/(rtw8822b|rtw8822c|rtw8723d|rtw8821c)_'
-  g -E '^rtw89/rtw89(52a|52b|52c|51b|22a)?_?(fw|8852a|8852b|8852c|8851b|8922a)'
+  g -E '^rtw89/rtw(8852a|8852b|8852bt|8852c|8851b|8922a)_fw'
   g -E '^rtl_bt/'
   # MediaTek mt7921/22/25 Wi-Fi + BT
   g -E '^mediatek/(WIFI_|BT_RAM_CODE_MT79|mt7925/|mt7927/)'

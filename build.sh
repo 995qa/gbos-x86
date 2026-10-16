@@ -19,7 +19,9 @@ for a in "$@"; do case $a in -y|--yes) YES=1;; --dry-run) DRY=1;; -h|--help) sed
 
 REL=https://github.com/linuxkid473/gbos-x86/releases/download/v32
 MODS=gbos86-modules-6.18.21-gbos-whl.tar.xz;               MODS_SHA=876705e2f707bde12ef558b0759f2b3c62db287e8163183d767d5f53fa3ffdac
-FW=gbos86-firmware-d5455717-sof2026.09.2.tar.xz;           FW_SHA=5d4c5ad675fa794da3ddd33e2dc7565699d58bb61b0c141b2ba26cb7580e2cc0
+# v33 firmware = v32 + Realtek rtw89 8852A/B/BT/C and 8851B (v32's fetch regex skipped them: no Wi-Fi on RTL8852BE laptops)
+REL_FW=https://github.com/linuxkid473/gbos-x86/releases/download/v33
+FW=gbos86-firmware-d5455717-sof2026.09.2-r2.tar.xz;        FW_SHA=877f6fe98f6027ab4ddc78fa7bfb768ffc55fdf1fe49dbae95263fc6f3c57b94
 GOOGLE=https://dl.google.com/device/recovery/lapis-user/16452207/recovery.zip
 PARTS="system_a vendor_a product_a system_ext_a system_dlkm_a vendor_dlkm_a"
 
@@ -40,7 +42,7 @@ NEED=""
 have_parts || NEED="$NEED\n  - Google's recovery image: $GOOGLE (7.7 GB, from dl.google.com)"
 [ -x kernel/out/busybox ] || NEED="$NEED\n  - busybox-static from Debian via docker (about 1 MB)"
 [ -d usb/modules/lib/modules ] || NEED="$NEED\n  - $MODS (14 MB, from this project's GitHub release)"
-[ -d usb/firmware/i915 ] || NEED="$NEED\n  - $FW (53 MB, from this project's GitHub release)"
+[ -f usb/firmware/rtw89/rtw8852b_fw.bin ] || NEED="$NEED\n  - $FW (53 MB, from this project's GitHub release)"
 if [ -z "$NEED" ]; then say "everything is already downloaded"; else
   printf 'This will download:%b\n' "$NEED"
 fi
@@ -61,8 +63,8 @@ if [ ! -d usb/modules/lib/modules ]; then
   say "3/4 kernel modules and firmware"
   fetch "$REL/$MODS" "build/dl/$MODS" "$MODS_SHA"; tar -xJf "build/dl/$MODS" -C usb
 else say "3/4 kernel modules: present"; fi
-if [ ! -d usb/firmware/i915 ]; then
-  fetch "$REL/$FW" "build/dl/$FW" "$FW_SHA"; tar -xJf "build/dl/$FW" -C usb
+if [ ! -f usb/firmware/rtw89/rtw8852b_fw.bin ]; then
+  fetch "$REL_FW/$FW" "build/dl/$FW" "$FW_SHA"; tar -xJf "build/dl/$FW" -C usb
 else say "    firmware: present"; fi
 
 say "4/4 building the image"

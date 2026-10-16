@@ -200,3 +200,11 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   `AttestAndSign ... PERMISSION_DENIED`. Fixing it would need a Google-accepted hardware attestation chain; not possible on this laptop, and faking one is not something to build.
   aidiag ping-as-uid results (user-0 uids 10107/10118/10119 "unknown host", shell 2000 fine) are an artifact: the foreground user is 10; test user-10 uids (1010107...) if this is revisited.
   Cloud-only features (Gemini app chat, Search) do not depend on AICore. Not yet checked on hardware: whether the Gemini app itself answers.
+- 2026-10-16 **Discord report: Acer Aspire Lite AL15-52 (i5-1235U), kernel #32, "no Wi-Fi", everything else works. Two causes, both fixed in the repo.**
+  (1) Their image predates `3626366`: the published/built `dist/gbOS86-20261016.img` (13:17) has no `gbos_load_opmodes` in `hwdetect.sh`, so iwlwifi loads but
+  `iwlmvm` never does (same as NVMe boot-20). Kernel is byte-identical, so a stick is fixed by copying `usb/hook.sh` + `usb/hwdetect.sh` to `gbos/` (or rebuild).
+  (2) `tools/fetch_firmware.sh` regex for `rtw89/` only matched `rtw8922a`: no firmware for RTL8852A/B/BT/C or 8851B (RTL8852BE is the usual Wi-Fi 6 card in budget Acers),
+  so the v32 firmware release had none. Regex fixed; those 12 files added; release **v33** carries `gbos86-firmware-d5455717-sof2026.09.2-r2.tar.xz`
+  (sha256 877f6fe9…), and `build.sh` now fetches firmware from v33 and re-downloads it if `usb/firmware/rtw89/rtw8852b_fw.bin` is missing (so existing checkouts upgrade).
+  The reporter's card model is unknown (their report had no lspci): ask for `gbos/logs/boot-N/hwdetect.txt` after the rebuild (`wifi=` line, "pci devices without a driver", "missing firmware").
+  Not verified on hardware (no such laptop here); AX201/AX211 (so-a0-hr/gf firmware) and RTL8852BE (rtw89_8852be) are both now covered.
