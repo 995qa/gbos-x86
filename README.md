@@ -193,14 +193,15 @@ Set `MODE=install` in `gbos/gbos.cfg` and boot the stick.
   you type the serial number. Layout: `GBOS_EFI` 512M (ESP), `GBOSSYS` 8G FAT32 (the `gbos/` files),
   `GBOS_META` 64M ext4, `GBOS_DATA` rest ext4. Every copied file is sha256-verified.
 - **gbos already installed:** it asks **1) Update** (keeps data, copies new files and kernel, and saves the
-  install's last 3 boots of logs to the stick) or **2) Reinstall** (erase; still asks for the serial).
+  install's last 3 boots of logs to the stick), **2) Reinstall** (erase; still asks for the serial) or
+  **3) Only save its logs** (read-only on the NVMe, takes seconds; `LOG_BOOTS=N` in `gbos.cfg` = how many boots).
 
 The installed system boots normally without the stick. With the stick plugged in and `MODE=install`,
 booting the stick always goes to that menu.
 
 ### Debugging workflow
 The installed system writes logs to its own `GBOSSYS` partition. To read them, boot the stick, choose
-**1 (Update)**, and read `gbos/logs/boot-N/nvme-logs/` on the stick from a computer. Each boot dir has
+menu **2**, then **3 (Only save its logs)** (or 1 to update too), and read `gbos/logs/boot-N/nvme-logs/` on the stick from a computer. Each boot dir has
 `kmsg.log`, `stage0-dmesg.txt` (look for `hook:` lines), rotated `logcat.txt*` (oldest = highest
 number), `crash.txt`, `hw.txt`, `audio.txt`, and `pstore-prev/` (the previous boot's kernel panic, if
 any). FAT has no journal: shut down from Android's power menu, not the power button.

@@ -185,3 +185,7 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   PccSecurity__aicore_package_security_info / PcsAi__enable_genai_inference_service flags, so the intended route is probably via as.oss and depends on a
   flag/security policy delivered by Phenotype. NOT fixed: no safe way found to give AICore network (INTERNET is set by ConnectivityService from the manifest;
   ndc only sets NETWORK/SYSTEM). Needs a run with working Wi-Fi: compare ping www.google.com / ondevicesafety as uid 10107 vs 10118 in ai-1/ai-2.
+- 2026-10-16 "Extract logs": boot menu **2** -> sub-menu now has **3) Only save its logs** (usb/install.sh, `ACTION=logs`, `LOG_BOOTS`, default 3): mounts GBOSSYS
+  read-only, copies the last N boots to the stick's boot-N/nvme-logs, powers off on Enter; seconds instead of Update's copy+verify of ~4 GB. `save_logs` (cp, falling
+  back to dd conv=noerror,sync for FAT-truncated files) is also used by Update. A top-level menu key 4 was written for stage0 but dropped: the menu lives in the kernel's
+  initramfs, so it needs a kernel rebuild (usb/make_initramfs.py reproduces #32's cpio byte for byte, so it would be an incremental relink). install.sh is a stick script, no kernel change.

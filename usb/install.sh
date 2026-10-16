@@ -14,6 +14,20 @@ tool() { $I/lib/ld-musl-x86_64.so.1 --library-path $I/lib $I/bin/"$@"; }
 TTY=/dev/tty1
 say() { echo "$*" > $TTY; echo "$*" >> $L/install.log; log "install: $*"; }
 halt_here() { say ""; say "$1"; say "Power off with the power button."; sync; while true; do sleep 3600; done; }
+# save_logs MOUNTED_GBOS_DIR [BOOTS]: copy the installed system's last BOOTS (default 3) boot-N log dirs to
+# this boot's log dir on the stick (gbos/logs/boot-N/nvme-logs). A file FAT can't read in full (cluster chain
+# cut short by a power-off) is copied with dd conv=noerror,sync instead of failing; the tail is then NULs.
+save_logs() {
+  mkdir -p $L/nvme-logs
+  for b in $(ls $1/logs | sort -t- -k2 -n | tail -n ${2:-3}); do
+    say "  $b"
+    (cd $1/logs && find $b -type d) | while read d; do mkdir -p $L/nvme-logs/$d; done
+    (cd $1/logs && find $b -type f) | while read f; do
+      cp $1/logs/$f $L/nvme-logs/$f 2>/dev/null || dd if=$1/logs/$f of=$L/nvme-logs/$f bs=4k conv=noerror,sync 2>/dev/null
+    done
+  done
+  sync
+}
 die() { halt_here "INSTALL FAILED: $*  (log: gbos/logs/boot-$N/install.log on the stick)"; }
 ask() { printf '%s' "$1" > $TTY; read -r REPLY < $TTY; echo "$1$REPLY" >> $L/install.log; }
 check() { a=$(sha256sum "$1" | cut -d' ' -f1); b=$(sha256sum "$2" | cut -d' ' -f1); [ "$a" = "$b" ] || die "verify failed: $2"; echo "ok $a $2" >> $L/install.log; }
@@ -46,9 +60,26 @@ if [ -z "$ACTION" ] && [ -n "$NSYS" ] && [ -n "$NEFI" ] && [ -n "$NDATA" ]; then
   say "Found an existing gbOS86 install on the NVMe."
   say "  1) Update it: keep apps, accounts and settings; save its logs to this stick"
   say "  2) Reinstall: ERASE the NVMe and install from scratch"
+  say "  3) Only save its logs to this stick (nothing on the NVMe is changed)"
   say "  anything else: cancel"
   ask "choice> "
-  case "$REPLY" in 1) ACTION=update;; 2) ACTION=install;; *) halt_here "Cancelled. Nothing was written.";; esac
+  case "$REPLY" in 1) ACTION=update;; 2) ACTION=install;; 3) ACTION=logs;; *) halt_here "Cancelled. Nothing was written.";; esac
+fi
+# ACTION=logs (menu choice 3, or ACTION=logs in gbos.cfg): read-only on the NVMe, takes seconds.
+# LOG_BOOTS in gbos.cfg = how many of the installed system's last boots to copy (default 3).
+if [ "$ACTION" = logs ]; then
+  [ -n "$NSYS" ] || die "no gbos install on the NVMe (GBOSSYS not found)"
+  mkdir -p /mnt/nsys
+  mount -t vfat -o ro $NSYS /mnt/nsys || die "mount GBOSSYS failed"
+  [ -d /mnt/nsys/gbos/logs ] || die "the installed system has no gbos/logs"
+  say "Saving the installed system's last ${LOG_BOOTS:-3} boots of logs to the stick (gbos/logs/boot-$N/nvme-logs) ..."
+  save_logs /mnt/nsys/gbos ${LOG_BOOTS:-3}
+  umount /mnt/nsys; sync
+  say ""
+  say "Logs saved. Remove the USB stick and turn the laptop back on."
+  log "install: logs saved"; sync
+  ask "Press Enter to power off. "
+  poweroff -f
 fi
 if [ "${ACTION:-install}" = update ]; then
   NSYS=$(findfs LABEL=GBOSSYS 2>/dev/null); NEFI=$(findfs LABEL=GBOS_EFI 2>/dev/null)
@@ -57,8 +88,7 @@ if [ "${ACTION:-install}" = update ]; then
   mount -t vfat -o flush $NSYS /mnt/nsys || die "mount GBOSSYS failed"
   mount -t vfat $NEFI /mnt/nefi || die "mount GBOS_EFI failed"
   say "Saving the installed system's logs to the stick (gbos/logs/boot-$N/nvme-logs) ..."
-  mkdir -p $L/nvme-logs
-  for b in $(ls /mnt/nsys/gbos/logs | sort -t- -k2 -n | tail -3); do cp -r /mnt/nsys/gbos/logs/$b $L/nvme-logs/; done
+  save_logs /mnt/nsys/gbos 3
   say "Updating the installed system (data is not touched) ..."
   for f in $FILES; do cmp -s $G/$f /mnt/nsys/gbos/$f || { say "  $f"; cp $G/$f /mnt/nsys/gbos/$f || die "copy $f failed"; }; done
   for d in $DIRS; do rm -rf /mnt/nsys/gbos/$d; cp -r $G/$d /mnt/nsys/gbos/ || die "copy $d/ failed"; done
