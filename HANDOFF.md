@@ -169,3 +169,19 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   ping-as-uid (10107 AICore, 10118 as.oss, 10119 as, 2000 shell), package/permission/gids dumps, connectivity/netpolicy/PCC state. Not yet run
   on hardware. install.sh FILES and make_gbos86_image.sh ship aidiag.sh. The dev stick was re-made this day (GPT, EFI 200 MB + GBOS 30 GB;
   mount the EFI partition with `sudo diskutil mount disk8s1`; the ESP image was written with dd so it keeps the EFI System type).
+- 2026-10-16 **Wi-Fi regression on kernel #32 (NVMe boot-20): root cause found and fixed.** hwdetect loaded iwlwifi by PCI alias and it took
+  its firmware (`loaded firmware version 46... op_mode iwlmvm`), but nothing loaded `iwlmvm`: the kernel's request_module() for the op_mode is a
+  silent no-op in the stage0 initramfs (the old hook.sh did an explicit `modprobe iwlmvm`). No iwlmvm/mac80211 in lsmod, no wlan0 (`wifi=` empty in
+  hwdetect.txt), so ai-1/ai-2 were taken with no network at all (every ping "unknown host", also as root) and say nothing about DNS.
+  Fix: `gbos_load_opmodes` in usb/hwdetect.sh modprobes whatever `op_mode iwl*` the dmesg announces, after every coldplug pass and every second of the
+  device wait while there is no wl* interface. hook.sh now also honours HWDETECT=0 by using the old sequence (it used to skip Wi-Fi entirely). I had
+  briefly staged a revert (#30 + HWDETECT=0), then undid it: #32 and HWDETECT=1 are back (usb/out/BOOTX64.EFI.32 is a copy of #32). Untested on hardware:
+  look for `hwdetect: loaded iwlmvm` and `wifi=wlan0` in stage0-dmesg.txt / hwdetect.txt.
+  aidiag.sh now waits (up to 5 min) for the network before dumping and pings www.google.com as each uid too, so ai-1/ai-2 become meaningful.
+- 2026-10-16 AI, from boot-20 dumps: AICore (prod_aicore_20260917.00_RC01, uid 10107) does NOT request android.permission.INTERNET (gids=[3013] only;
+  as.oss has INTERNET + 3003, gpointer has 3003). Its feature-manifest fetch runs a gRPC DnsNameResolver in the AICore process itself (stack ioh/ihi in
+  pid of com.google.android.aicore), so "Unable to resolve host ondevicesafety-pa.googleapis.com" (55x in boot-19, with Wi-Fi up) fits an app with no
+  INTERNET: netd blocks its DNS. AICore also binds as.oss AstreaGrpcService (act=grpc.io.action.BIND), and as.oss hardcodes that host and has
+  PccSecurity__aicore_package_security_info / PcsAi__enable_genai_inference_service flags, so the intended route is probably via as.oss and depends on a
+  flag/security policy delivered by Phenotype. NOT fixed: no safe way found to give AICore network (INTERNET is set by ConnectivityService from the manifest;
+  ndc only sets NETWORK/SYSTEM). Needs a run with working Wi-Fi: compare ping www.google.com / ondevicesafety as uid 10107 vs 10118 in ai-1/ai-2.

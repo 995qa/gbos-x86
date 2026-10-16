@@ -25,6 +25,16 @@ gbos_modules_mount() {
   return 1
 }
 
+# iwlwifi is only the bus half: once it has its firmware it asks for the op_mode driver named in the ucode
+# ("... op_mode iwlmvm") with request_module(), which silently does nothing in this initramfs. Without
+# iwlmvm there is no wlan0 (boot-20 on kernel #32: iwlwifi loaded, firmware loaded, no Wi-Fi). Load it ourselves.
+gbos_load_opmodes() {
+  for m in $(dmesg | sed -n 's/.*op_mode \(iwl[a-z]*\).*/\1/p' | sort -u); do
+    grep -q "^$m " /proc/modules && continue
+    modprobe -q $m && log "hwdetect: loaded $m (op_mode announced by iwlwifi)" || log "hwdetect: modprobe $m FAILED"
+  done
+}
+
 # One coldplug pass: all modaliases, de-duplicated, to a single modprobe (it reads modules.alias once).
 gbos_coldplug_pass() {
   find /sys/devices -name modalias 2>/dev/null | xargs cat 2>/dev/null | sort -u \
@@ -37,7 +47,7 @@ gbos_coldplug() {
   p=1; before=$(wc -l < /proc/modules)
   while [ $p -le 4 ]; do
     gbos_coldplug_pass
-    sleep 1; mdev -s 2>/dev/null
+    sleep 1; gbos_load_opmodes; mdev -s 2>/dev/null
     now=$(wc -l < /proc/modules)
     log "hwdetect: coldplug pass $p: $now modules loaded (was $before)"
     [ $now -eq $before ] && break
@@ -54,6 +64,7 @@ gbos_wait_devices() {
     s=$(grep -c '\[' /proc/asound/cards 2>/dev/null)
     # Done when every class that exists on this machine has shown up, or nothing is loading any more.
     if [ "$w" -gt 0 ] && [ "$b" -gt 0 ] && [ "$s" -gt 0 ]; then break; fi
+    [ "$w" -eq 0 ] && grep -q '^iwlwifi ' /proc/modules && gbos_load_opmodes
     sleep 1; i=$((i+1))
   done
   log "hwdetect: devices after ${i}s: wifi=$(ls /sys/class/net 2>/dev/null | grep '^wl' | tr '\n' ' ') bt=$(ls /sys/class/bluetooth 2>/dev/null | tr '\n' ' ') sound=$(cat /proc/asound/cards 2>/dev/null | grep '\[' | tr -s ' ' | tr '\n' ';') backlight=$(ls /sys/class/backlight 2>/dev/null | tr '\n' ' ')"

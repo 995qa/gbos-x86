@@ -9,7 +9,7 @@ modprobe zram && log "hook: zram loaded" || log "hook: modprobe zram FAILED"
 # with firmware from gbos/firmware, and writes hwdetect.txt. Falls back to the original Latitude 5300 sequence
 # (below) when a stick has no gbos/modules.
 FWP=/sys/module/firmware_class/parameters/path
-if [ -f $G/hwdetect.sh ] && [ -d $G/modules/lib/modules ]; then
+if [ "$HWDETECT" != 0 ] && [ -f $G/hwdetect.sh ] && [ -d $G/modules/lib/modules ]; then
   . $G/hwdetect.sh
   gbos_hwdetect 15
   # Late firmware requests (after switch_root) see the stick as /postinstall.
@@ -117,28 +117,28 @@ service gbos_aidiag /system/bin/sh /postinstall/gbos/aidiag.sh $N
     seclabel u:r:shell:s0
     oneshot
 
-service gbos_aidns_10107 /system/bin/sh -c "ping -c 2 -W 5 ondevicesafety-pa.googleapis.com > /dev/aidns_10107.txt 2>&1"
+service gbos_aidns_10107 /system/bin/sh -c "(ping -c 1 -W 5 www.google.com; ping -c 2 -W 5 ondevicesafety-pa.googleapis.com) > /dev/aidns_10107.txt 2>&1"
     user 10107
     group inet
     seclabel u:r:shell:s0
     oneshot
     disabled
 
-service gbos_aidns_10118 /system/bin/sh -c "ping -c 2 -W 5 ondevicesafety-pa.googleapis.com > /dev/aidns_10118.txt 2>&1"
+service gbos_aidns_10118 /system/bin/sh -c "(ping -c 1 -W 5 www.google.com; ping -c 2 -W 5 ondevicesafety-pa.googleapis.com) > /dev/aidns_10118.txt 2>&1"
     user 10118
     group inet
     seclabel u:r:shell:s0
     oneshot
     disabled
 
-service gbos_aidns_10119 /system/bin/sh -c "ping -c 2 -W 5 ondevicesafety-pa.googleapis.com > /dev/aidns_10119.txt 2>&1"
+service gbos_aidns_10119 /system/bin/sh -c "(ping -c 1 -W 5 www.google.com; ping -c 2 -W 5 ondevicesafety-pa.googleapis.com) > /dev/aidns_10119.txt 2>&1"
     user 10119
     group inet
     seclabel u:r:shell:s0
     oneshot
     disabled
 
-service gbos_aidns_2000 /system/bin/sh -c "ping -c 2 -W 5 ondevicesafety-pa.googleapis.com > /dev/aidns_2000.txt 2>&1"
+service gbos_aidns_2000 /system/bin/sh -c "(ping -c 1 -W 5 www.google.com; ping -c 2 -W 5 ondevicesafety-pa.googleapis.com) > /dev/aidns_2000.txt 2>&1"
     user 2000
     group inet
     seclabel u:r:shell:s0

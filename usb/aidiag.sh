@@ -67,7 +67,10 @@ run() {
   } > $O 2>&1
 }
 
+# Without a network every ping fails and the dump says nothing (boot-20 ran with no Wi-Fi), so wait for it.
+waitnet() { i=0; while [ $i -lt 60 ] && ! ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; do sleep 5; i=$((i+1)); done; echo "net wait $((i*5))s" > $L/ai-net.txt; }
 sleep 90
+waitnet
 run 1
-sleep 150
+sleep 120
 run 2
