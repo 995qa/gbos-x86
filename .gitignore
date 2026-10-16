@@ -54,3 +54,6 @@ __pycache__/
 
 # website runtime data
 /website/data/
+
+# one-command build downloads
+/build/

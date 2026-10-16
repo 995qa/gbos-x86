@@ -127,6 +127,11 @@ def home(req, cats, latest, news, st):
 <ul class="chips"><li>SHA-NI / VNNI / GFNI / VAES patched</li><li>Auto-detects Wi-Fi, Bluetooth, sound, touchpad</li><li>Live USB, install or update</li></ul>
 </div><div class="hero-art"><img src="/static/logo.png" alt="gbOS86 logo: a laptop running Googlebook OS" width="420" height="420"></div></section>
 
+<section class="demo card"><div class="demo-text"><p class="eyebrow">Running on a Dell Latitude 5300</p><h2>See it running</h2>
+<p>Googlebook OS running on a Dell Latitude 5300 business laptop (Intel i5-8365U): the desktop and taskbar, the Bluetooth and Wi-Fi quick settings, the touchpad and keyboard.</p>
+<p class="mut">43 seconds, no sound, filmed on the laptop itself. Only this one laptop is tested so far; <a href="/hardware">help us find out about yours</a>.</p></div>
+<video controls preload="metadata" playsinline poster="/static/demo-poster.jpg" width="320" height="568"><source src="/static/demo.mp4" type="video/mp4">Your browser can't play this video. <a href="/static/demo.mp4">Download it</a>.</video></section>
+
 <section class="grid3">
 <div class="card"><h3>Patched for your CPU</h3><p>Google's OS expects instructions older chips lack. gbOS86 emulates them in the kernel and pre-patches the hot libraries, so boot and Play Store installs stay fast.</p></div>
 <div class="card"><h3>Generic hardware support</h3><p>Every boot reads your devices and loads the right drivers: Intel, Realtek, MediaTek, Qualcomm and Broadcom Wi-Fi, Bluetooth, HDA and SOF audio, I2C and PS/2 touchpads, laptop hotkeys, backlight.</p></div>
@@ -333,12 +338,11 @@ def hardware(req):
 def download(req):
     return '''<div class="doc"><h1>Get gbOS86</h1>
 <div class="notice warn"><strong>Why there is no download button.</strong> The image contains Google's OS and Google libraries that we patch. Redistributing those is not ours to do, so gbOS86 ships as <em>tools</em>: you build the image yourself from Google's public recovery image. Everything we wrote is in the build tools.</div>
-<h2>How the image is built</h2>
-<ol><li><strong>Get Google's OS.</strong> Download the Googlebook recovery image from Google (the script in the project fetches it from <code>dl.google.com</code>) and extract the partitions.</li>
-<li><strong>Build the payload.</strong> Patched libraries, the CPU-emulation kernel with the generic driver set, the module tree, and firmware from linux-firmware and sof-bin.</li>
-<li><strong>Assemble the image.</strong> One script produces <code>gbOS86-Generic-Patched-DATE.img</code> (about 6.7 GB, 8 GB stick or larger) with its checksum.</li>
-<li><strong>Flash it</strong> and follow the <a href="/docs/install">install guide</a>.</li></ol>
-<p>You need a Mac or Linux machine with Docker, Python 3 and about 30 GB free. The tools, the kernel patches and the full build notes are in the <a href="https://github.com/linuxkid473/gbos-x86" rel="noopener" target="_blank">open-source repository on GitHub</a>. It does not contain Google's OS images, which you download yourself; it does include the small set of patched Google libraries the build needs. Ask in the <a href="/forum/c/downloads">Downloads &amp; Builds</a> forum or on Discord if you get stuck.</p>
+<h2>Build it in one command</h2>
+<pre><code>git clone https://github.com/linuxkid473/gbos-x86 &amp;&amp; cd gbos-x86
+./build.sh</code></pre>
+<p>The script asks before downloading anything, then: fetches Google's public recovery image (7.7 GB) and extracts only the six partitions gbOS86 needs, gets a small busybox, the kernel modules and the firmware, and assembles <code>dist/gbOS86-DATE.img</code> (about 6.7 GB). Flash it to a USB stick of 8 GB or more (balenaEtcher, Rufus or <code>dd</code>), boot it, and follow the <a href="/docs/install">install guide</a>. <code>./build.sh --dry-run</code> shows what it would download.</p>
+<p>You need a Mac or Linux machine with Docker (running), Python 3 and about 35 GB free. The tools, the kernel patches and the full build notes are in the <a href="https://github.com/linuxkid473/gbos-x86" rel="noopener" target="_blank">open-source repository on GitHub</a>. It does not contain Google's OS images, which you download yourself; it does include the small set of patched Google libraries the build needs. Ask in the <a href="/forum/c/downloads">Downloads &amp; Builds</a> forum or on Discord if you get stuck.</p>
 <h2>What is inside</h2>
 <table class="spec"><tbody><tr><td>Kernel</td><td>Linux 6.18 (Android common), CPU-instruction emulation, Intel i915 with colour fixes, about 400 driver modules.</td></tr>
 <tr><td>Patched</td><td>libz and libcrypto without SHA-NI, bound before the first partition mounts so boot is not slowed by trapped instructions.</td></tr>

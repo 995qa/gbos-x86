@@ -206,6 +206,7 @@ def updating():
 def building():
     return '''<h1>Building from source</h1>
 <div class="notice warn">The image contains Google's OS, so it is built locally from Google's public recovery image and is not distributed. The source is on <a href="https://github.com/linuxkid473/gbos-x86" rel="noopener" target="_blank">GitHub</a>. You need a Mac or Linux machine with Docker, Python 3, QEMU for tests, and about 30 GB free.</div>
+<p>For most people: <code>git clone https://github.com/linuxkid473/gbos-x86 &amp;&amp; cd gbos-x86 &amp;&amp; ./build.sh</code> does steps 1, 2, 8 and 9 below for you (it downloads the prebuilt kernel modules and firmware instead of building them). The full process:</p>
 <ol>
 <li><strong>Google's OS.</strong> Download the Googlebook recovery image from Google's servers and extract the logical partitions (system, vendor, product, system_ext, system_dlkm, vendor_dlkm; slot A) from its <code>super</code> partition.</li>
 <li><strong>super.img.</strong> Rebuild a dynamic-partition image from them, under 4 GB so it fits on FAT32.</li>

@@ -23,7 +23,7 @@ BASE = os.environ.get('GBOS_BASE', 'https://gbos86.com')
 MAX_BODY = 64 * 1024
 SESSION_DAYS = 30
 STATIC = os.path.join(HERE, 'static')
-MIME = {'.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml',
+MIME = {'.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp4': 'video/mp4', '.gif': 'image/gif', '.svg': 'image/svg+xml',
         '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml'}
 
 CATEGORIES = [  # slug, title, description, staff_only
@@ -584,15 +584,36 @@ def serve_static(h, rel):
     fp = os.path.normpath(os.path.join(STATIC, rel))
     if not fp.startswith(STATIC + os.sep) or not os.path.isfile(fp):
         return False
-    data = open(fp, 'rb').read()
-    h.send_response(200)
+    size = os.path.getsize(fp)
+    start, end, status = 0, size - 1, 200
+    rng = h.headers.get('Range', '')
+    m = re.fullmatch(r'bytes=(\d*)-(\d*)', rng)  # single range only: enough for video seeking
+    if m and (m.group(1) or m.group(2)):
+        if m.group(1):
+            start = int(m.group(1)); end = int(m.group(2)) if m.group(2) else size - 1
+        else:
+            start = max(0, size - int(m.group(2))); end = size - 1
+        if start >= size or start > end:
+            h.send_response(416); h.send_header('Content-Range', 'bytes */%d' % size); h.end_headers(); return True
+        end = min(end, size - 1); status = 206
+    h.send_response(status)
     h.send_header('Content-Type', MIME.get(os.path.splitext(fp)[1].lower(), 'application/octet-stream'))
-    h.send_header('Content-Length', str(len(data)))
+    h.send_header('Content-Length', str(end - start + 1))
+    h.send_header('Accept-Ranges', 'bytes')
+    if status == 206:
+        h.send_header('Content-Range', 'bytes %d-%d/%d' % (start, end, size))
     h.send_header('Cache-Control', 'public, max-age=86400')
     h.send_header('X-Content-Type-Options', 'nosniff')
     h.end_headers()
     if h.command != 'HEAD':
-        h.wfile.write(data)
+        with open(fp, 'rb') as f:
+            f.seek(start)
+            left = end - start + 1
+            while left:
+                b = f.read(min(left, 1 << 20))
+                if not b:
+                    break
+                h.wfile.write(b); left -= len(b)
     return True
 
 

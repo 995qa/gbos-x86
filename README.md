@@ -1,5 +1,8 @@
 # gbos-x86 (gbOS86)
 
+<p align="center"><img src="docs/demo.gif" alt="gbOS86 running on a Dell Latitude 5300" height="420">&nbsp;&nbsp;<img src="docs/screenshot-dell-latitude-5300.jpg" alt="Googlebook OS on a Dell Latitude 5300" height="420"></p>
+<p align="center"><b>Googlebook OS on a Dell Latitude 5300.</b> Full 43 s demo: <a href="https://gbos86.com/static/demo.mp4">gbos86.com/static/demo.mp4</a></p>
+
 Google's **Googlebook OS** (the `lapis` Android desktop build) running on an ordinary laptop: a
 **Dell Latitude 5300** (Intel i5-8365U "Whiskey Lake", UHD 620, 16 GB). It boots from a USB stick or
 from the internal NVMe, reaches the desktop, and runs Play Store apps.
@@ -10,6 +13,22 @@ from the internal NVMe, reaches the desktop, and runs Play Store apps.
 > because the build needs them; Google's terms apply to them. The OS images themselves are not in the repo (they are
 > GBs and Google's); you rebuild them from Google's official recovery download. gbOS86 is an independent project, not
 > affiliated with or endorsed by Google.
+
+## Try it: build and flash in 3 steps
+
+You need macOS or Linux with **docker** (running), **python3**, curl and about **35 GB** of free disk. Nothing from Google is
+stored in this repository: the script downloads Google's public recovery image itself.
+
+```sh
+git clone https://github.com/linuxkid473/gbos-x86 && cd gbos-x86
+./build.sh                      # asks before downloading; writes dist/gbOS86-YYYYMMDD.img (6.7 GB)
+# flash it: balenaEtcher / Rufus, or  sudo dd if=dist/gbOS86-*.img of=/dev/rdiskN bs=4m
+```
+Then boot the laptop from the stick (F12), turn Secure Boot off, and choose **1** (live, nothing is written to the laptop).
+`./build.sh --dry-run` shows what it would download (Google's 7.7 GB image, ~1 MB busybox, 14 MB of kernel modules and 53 MB of firmware
+from this repo's [release](https://github.com/linuxkid473/gbos-x86/releases)). It streams only the six partitions it needs out of
+Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download. Only the Dell
+Latitude 5300 has been tested; if you try another laptop, please post its `gbos/logs/boot-N/hwdetect.txt` in an issue.
 
 ## Status
 
