@@ -208,3 +208,9 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   (sha256 877f6fe9…), and `build.sh` now fetches firmware from v33 and re-downloads it if `usb/firmware/rtw89/rtw8852b_fw.bin` is missing (so existing checkouts upgrade).
   The reporter's card model is unknown (their report had no lspci): ask for `gbos/logs/boot-N/hwdetect.txt` after the rebuild (`wifi=` line, "pci devices without a driver", "missing firmware").
   Not verified on hardware (no such laptop here); AX201/AX211 (so-a0-hr/gf firmware) and RTL8852BE (rtw89_8852be) are both now covered.
+- 2026-10-16 **Acer Aspire Lite AL15-52 Bluetooth (Intel AX201, USB 8087:0026): firmware name was a WHENCE link we never shipped.** Reporter's hwdetect.txt: btusb bound and
+  `hci0` exists, but `Bluetooth: hci0: Failed to load Intel firmware file intel/ibt-0040-1050.sfi (-2)`. linux-firmware's WHENCE has `Link: intel/ibt-0040-1050.sfi -> ibt-0040-0041.sfi`
+  (and .ddc); Links only exist after linux-firmware's install script, and `tools/fetch_firmware.sh` reads `git ls-tree`, so every Link was skipped. Same for `ibt-0040-4150 -> 0040-0041`
+  and `ibt-0040-2120 -> 0040-1020`. `fetch_firmware.sh` now copies the target for each WHENCE Link whose target we ship (FAT has no symlinks). Local `usb/firmware/intel` has the six
+  files; stick fix for the reporter = `dist/gbos-bt-fix-ibt-0040-1050.zip` (merge into the stick's `gbos/`, then Update). Firmware is not in git: a permanent fix needs a new firmware
+  release (v34) and `build.sh` pointing at it. Other Links (not only Bluetooth) are now picked up on the next full fetch; not yet re-run (needs the 1.5 GB linux-firmware clone). Not verified on hardware.

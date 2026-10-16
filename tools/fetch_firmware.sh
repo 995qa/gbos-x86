@@ -43,6 +43,14 @@ g() { grep "$@" $W/all.txt || true; }
 tr '\n' '\0' < $W/want.txt | xargs -0 git checkout HEAD --
 mkdir -p $OUT
 tar -cf - -T $W/want.txt | tar -xf - -C $OUT
+# WHENCE "Link: a -> b" entries (b relative to a's folder) exist only after linux-firmware's own install script runs; they are not in
+# the git tree. Drivers still ask for the link names: Intel AX201 Bluetooth wants intel/ibt-0040-1050.sfi, a link to ibt-0040-0041.sfi
+# (reporter's hwdetect: "Failed to load Intel firmware file intel/ibt-0040-1050.sfi (-2)"). FAT has no symlinks: copy the target,
+# but only when we ship the target and the link name isn't a real file already.
+git show HEAD:WHENCE | sed -n 's/^Link: \([^ ]*\) -> \(.*\)$/\1 \2/p' | while read l t; do
+  src=$OUT/$(dirname "$l")/$t
+  [ -f "$OUT/$l" ] || [ ! -f "$src" ] || { mkdir -p "$OUT/$(dirname "$l")"; cp "$src" "$OUT/$l"; }
+done
 # This kernel's iwlwifi requests "iwlwifi-*.ucode" from the firmware root (no intel/iwlwifi/ prefix).
 if [ -d $OUT/intel/iwlwifi ]; then mv $OUT/intel/iwlwifi/* $OUT/ && rmdir $OUT/intel/iwlwifi; fi
 # keep the symlink-targets: linux-firmware uses symlinks (e.g. in rtw89, intel/sof); FAT can't, so dereference.
