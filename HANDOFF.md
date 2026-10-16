@@ -214,7 +214,6 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   and `ibt-0040-2120 -> 0040-1020`. `fetch_firmware.sh` now copies the target for each WHENCE Link whose target we ship (FAT has no symlinks). Local `usb/firmware/intel` has the six
   files; stick fix for the reporter = `dist/gbos-bt-fix-ibt-0040-1050.zip` (merge into the stick's `gbos/`, then Update). Permanent fix 2026-10-17: release **v34** carries `gbos86-firmware-d5455717-sof2026.09.2-r3.tar.xz`
   (v33 + those six files, 38 MB, sha256 653a6a22…); `build.sh` fetches it and re-downloads when `usb/firmware/intel/ibt-0040-1050.sfi` is missing (existing checkouts upgrade). Other Links (not only Bluetooth) are now picked up on the next full fetch; not yet re-run (needs the 1.5 GB linux-firmware clone). Not verified on hardware.
-  release (v34) and `build.sh` pointing at it. Other Links (not only Bluetooth) are now picked up on the next full fetch; not yet re-run (needs the 1.5 GB linux-firmware clone). Not verified on hardware.
 - 2026-10-16 **Local AI replacement for AICore (new, optional; `localai/`, not yet booted on hardware).** Since Google's servers refuse AICore without
   key attestation (entry above), `localai/` builds a stand-in with package `com.google.android.aicore` (APK, ~20 KB) that answers gPointer's binder calls
   and runs **Gemma 4 E2B** (official QAT q4_0 GGUF, 3.35 GB) through `llama-server` (llama.cpp v0.7.0, Android x86_64, AVX2 only). Protocol read from gPointer's
