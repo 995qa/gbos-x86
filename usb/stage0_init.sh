@@ -1,5 +1,5 @@
 #!/bin/busybox sh
-# gbOS86 stage0: find the gbOS86 volume (USB stick or NVMe install), show the boot menu, log
+# gbOS86 stage0: find the gbOS86 volume (USB stick or NVMe/eMMC install), show the boot menu, log
 # everything to it, mount the lapis erofs images, create dm devices, switch to Android init.
 export PATH=/bin:/sbin
 /bin/busybox --install -s /bin
@@ -21,7 +21,11 @@ for i in $(seq 0 15); do mknod -m 660 /dev/loop$i b 7 $i 2>/dev/null; done
 mkdir -p -m 0755 /dev/socket /dev/block /dev/pts /dev/dm-user /dev/mapper
 mknod -m 600 /dev/mapper/control c 10 236; mknod -m 600 /dev/device-mapper c 10 236
 
-# Find the gbos volume: the USB stick (label GBOS) or an NVMe install (label GBOSSYS, made by
+# eMMC is the internal disk of many small laptops: its controller driver is a module (the NVMe driver is built in), so load it before
+# looking for the volume. Silent if there is no such controller; coldplug (hwdetect) would otherwise only load it after boot.
+modprobe -q sdhci-pci 2>/dev/null && log "sdhci-pci loaded (eMMC/SD controller)"
+
+# Find the gbos volume: the USB stick (label GBOS) or an NVMe/eMMC install (label GBOSSYS, made by
 # gbos/install.sh). The stick wins when present, unless the NVMe install exists and the stick's
 # gbos.cfg doesn't ask for it (MODE=install or BOOT_FROM=stick). NVMe shows up long before USB,
 # so give the stick a few seconds after GBOSSYS appears.
