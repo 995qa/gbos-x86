@@ -38,8 +38,19 @@ g() { grep "$@" $W/all.txt || true; }
   g -E '^brcm/(BCM|brcmfmac4(3602|350|356|358|3455|371))'
   # Cirrus amps found on some laptops
   g -E '^cirrus/cs35l(41|56)-[^/]*$'
-  # Intel sensor hub (ISH) firmware is board-specific and loaded by the BIOS; skipped.
+  # Drivers that build the firmware name at run time (not in MODULE_FIRMWARE): ship their whole family
+  g -E '^ath12k/WCN7850/'
+  g -E '^ath10k/(QCA6174|QCA9377|QCA9984|QCA9887|QCA988X)/'
+  g -E '^(rtw88|rtl_bt|rtl_nic|qca|brcm|cypress|cirrus|xe)/'
+  g -E '^intel/ish/'
+  g -E '^rtw89/'
+  # Intel sensor hub (ISH): the BIOS can also load it, the files in intel/ish/ are for boards that need the OS to.
+  # Everything the shipped kernel modules ask for (MODULE_FIRMWARE read from the .ko files): amdgpu, r8169/r8152, btmtk, mt76, ...
+  git show HEAD:WHENCE > $W/WHENCE
+  python3 -I $REPO/tools/fw_wanted.py $REPO/usb/modules $W/all.txt $W/WHENCE
 } | grep -v ' ' | sort -u > $W/want.txt
+python3 -I $REPO/tools/fw_wanted.py $REPO/usb/modules $W/all.txt $W/WHENCE --unresolved > $W/unresolved.txt
+echo "modules ask for $(wc -l < $W/unresolved.txt | tr -d ' ') names linux-firmware does not have (see $W/unresolved.txt; older/pre-production chips, SDIO boards)"
 tr '\n' '\0' < $W/want.txt | xargs -0 git checkout HEAD --
 mkdir -p $OUT
 tar -cf - -T $W/want.txt | tar -xf - -C $OUT
