@@ -49,3 +49,5 @@ __pycache__/
 !/usb/firmware/intel/
 /usb/firmware/intel/*
 /usb/modules/
+/usb/firmware/iwlwifi-*
+!/usb/firmware/iwlwifi-9000-pu-b0-jf-b0-46.ucode
