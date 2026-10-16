@@ -1,12 +1,12 @@
-# gbOS86 NVMe installer/updater. Sourced by stage0 for menu choice 2 (or gbos.cfg MODE=install), after the
-# stick is mounted at /gbos ($G=/gbos/gbos, log dir $L, stick partition $DEV) and drivers loaded.
+# gbOS86 installer/updater for the laptop's internal disk: NVMe or eMMC. Sourced by stage0 for menu choice 2 (or gbos.cfg
+# MODE=install), after the stick is mounted at /gbos ($G=/gbos/gbos, log dir $L, stick partition $DEV) and drivers loaded.
 #
-# ERASES THE WHOLE TARGET NVMe and lays it out as:
+# ERASES THE WHOLE TARGET DISK and lays it out as:
 #   p1 GBOS_EFI   512 MiB FAT32, EFI system partition: EFI/BOOT/BOOTX64.EFI (this kernel + stage0)
 #   p2 GBOSSYS      8 GiB FAT32: gbos/ as on the stick (super.img, hook.sh, firmware, ...)
 #   p3 GBOS_META   64 MiB ext4: Android /metadata
 #   p4 GBOS_DATA   rest   ext4: Android /data
-# Nothing is written until the disk's serial number is typed. Every copied file is checked with
+# Nothing is written until the disk's serial number is typed (eMMC: the MMC serial, or its CID if that is empty or zero). Every copied file is checked with
 # sha256 after being read back from the disk. Never returns: powers off or waits on failure.
 
 I=$G/installer
@@ -205,18 +205,18 @@ tool sfdisk --version > /dev/null 2>&1 || die "partitioning tools in gbos/instal
 NSYS=$(findfs LABEL=GBOSSYS 2>/dev/null); NEFI=$(findfs LABEL=GBOS_EFI 2>/dev/null); NDATA=$(findfs LABEL=GBOS_DATA 2>/dev/null)
 if [ -z "$ACTION" ] && [ -n "$NSYS" ] && [ -n "$NEFI" ] && [ -n "$NDATA" ]; then
   # An install exists: never erase it just because the stick was left in. Ask.
-  say "Found an existing gbOS86 install on the NVMe."
+  say "Found an existing gbOS86 install on the internal disk."
   say "  1) Update it: keep apps, accounts and settings; save its logs to this stick"
-  say "  2) Reinstall: ERASE the NVMe and install from scratch"
-  say "  3) Only save its logs to this stick (nothing on the NVMe is changed)"
+  say "  2) Reinstall: ERASE the disk and install from scratch"
+  say "  3) Only save its logs to this stick (nothing on the disk is changed)"
   say "  anything else: cancel"
   ask "choice> "
   case "$REPLY" in 1) ACTION=update;; 2) ACTION=install;; 3) ACTION=logs;; *) halt_here "Cancelled. Nothing was written.";; esac
 fi
-# ACTION=logs (menu choice 3, or ACTION=logs in gbos.cfg): read-only on the NVMe, takes seconds.
+# ACTION=logs (menu choice 3, or ACTION=logs in gbos.cfg): read-only on the internal disk, takes seconds.
 # LOG_BOOTS in gbos.cfg = how many of the installed system's last boots to copy (default 3).
 if [ "$ACTION" = logs ]; then
-  [ -n "$NSYS" ] || die "no gbos install on the NVMe (GBOSSYS not found)"
+  [ -n "$NSYS" ] || die "no gbos install on the internal disk (GBOSSYS not found)"
   mkdir -p /mnt/nsys
   mount -t vfat -o ro $NSYS /mnt/nsys || die "mount GBOSSYS failed"
   [ -d /mnt/nsys/gbos/logs ] || die "the installed system has no gbos/logs"
@@ -231,7 +231,7 @@ if [ "$ACTION" = logs ]; then
 fi
 if [ "${ACTION:-install}" = update ]; then
   NSYS=$(findfs LABEL=GBOSSYS 2>/dev/null); NEFI=$(findfs LABEL=GBOS_EFI 2>/dev/null)
-  [ -n "$NSYS" ] && [ -n "$NEFI" ] || die "no gbos install on the NVMe (GBOSSYS/GBOS_EFI not found)"
+  [ -n "$NSYS" ] && [ -n "$NEFI" ] || die "no gbos install on the internal disk (GBOSSYS/GBOS_EFI not found)"
   mkdir -p /mnt/nsys /mnt/nefi
   mount -t vfat -o flush $NSYS /mnt/nsys || die "mount GBOSSYS failed"
   mount -t vfat $NEFI /mnt/nefi || die "mount GBOS_EFI failed"
@@ -265,20 +265,49 @@ if [ "${ACTION:-install}" = update ]; then
   poweroff -f
 fi
 
-# Target: an internal NVMe namespace, never the stick.
-set -- $(ls /sys/block | grep '^nvme[0-9]*n[0-9]*$')
-[ $# -ge 1 ] || die "no NVMe disk found (block devices: $(ls /sys/block | tr '\n' ' '))"
-[ $# -eq 1 ] || die "more than one NVMe disk ($*); this installer only handles one"
+# Target: an internal disk, never the stick: an NVMe namespace or eMMC. eMMC needs its host controller driver (sdhci-pci). The kernel's
+# initramfs has it from kernel #33 on; older kernels only have it in the stick's module tree, so bind that tree and load it from there.
+if ! ls /sys/block | grep -q '^mmcblk'; then
+  KVER=$(uname -r)
+  [ -f $G/modules/lib/modules/$KVER/modules.dep ] && ! mountpoint -q /lib/modules 2>/dev/null && mount --bind $G/modules/lib/modules /lib/modules 2>/dev/null
+  modprobe -q sdhci-pci 2>/dev/null && log "install: sdhci-pci loaded"
+fi
+# Candidates: nvmeXnY, and mmcblkN whose device type is MMC (eMMC). SD cards and card readers are never targets; the eMMC's own
+# mmcblkNbootX / mmcblkNrpmb nodes are not matched. The stick's disk is never a candidate.
+internal_disks() {
+  for n in $(ls /sys/block | grep -E '^(nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$'); do
+    [ "$n" = "$STICKDISK" ] && continue
+    case $n in mmcblk*) [ "$(cat /sys/block/$n/device/type 2>/dev/null)" = MMC ] || continue;; esac
+    echo $n
+  done
+}
+# eMMC takes a moment to enumerate after the driver loads.
+for i in 1 2 3 4 5 6 7 8 9 10; do mdev -s; [ -n "$(internal_disks)" ] && break; sleep 1; done
+set -- $(internal_disks)
+[ $# -ge 1 ] || die "no internal NVMe or eMMC disk found (block devices: $(ls /sys/block | tr '\n' ' '))"
+if [ -n "$INSTALL_DISK" ]; then   # gbos.cfg INSTALL_DISK=mmcblk0 chooses when there is more than one
+  case " $* " in *" $INSTALL_DISK "*) set -- $INSTALL_DISK;; *) die "INSTALL_DISK=$INSTALL_DISK is not one of the internal disks ($*)";; esac
+fi
+[ $# -eq 1 ] || die "more than one internal disk ($*); set INSTALL_DISK=<name> in gbos.cfg on the stick to pick one"
 T=$1; TD=/dev/$T
 [ "$T" != "$STICKDISK" ] || die "target $T is the stick"
 CTRL=/sys/block/$T/device
-MODEL=$(cat $CTRL/model 2>/dev/null | sed 's/ *$//'); SERIAL=$(cat $CTRL/serial 2>/dev/null | sed 's/^ *//; s/ *$//')
+case $T in
+  mmcblk*)
+    KIND=eMMC
+    MODEL="$(cat $CTRL/name 2>/dev/null | sed 's/ *$//') (eMMC, manufacturer id $(cat $CTRL/manfid 2>/dev/null))"
+    SERIAL=$(cat $CTRL/serial 2>/dev/null | sed 's/^ *//; s/ *$//')
+    case "$SERIAL" in ''|0|0x0|0x00000000) SERIAL=$(cat $CTRL/cid 2>/dev/null | sed 's/ //g');; esac;;
+  *)
+    KIND=NVMe
+    MODEL=$(cat $CTRL/model 2>/dev/null | sed 's/ *$//'); SERIAL=$(cat $CTRL/serial 2>/dev/null | sed 's/^ *//; s/ *$//');;
+esac
 SIZE=$(( $(cat /sys/block/$T/size) * 512 )); GB=$(( SIZE / 1000000000 ))
 [ -n "$SERIAL" ] || die "cannot read the serial number of $T"
 [ $GB -ge 24 ] || die "$T is only ${GB} GB; need at least 24 GB"
 
 say ""
-say "Target disk: $TD"
+say "Target disk: $TD ($KIND)"
 say "  model:  $MODEL"
 say "  serial: $SERIAL"
 say "  size:   ${GB} GB"
@@ -316,7 +345,7 @@ size=64MiB, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="GBOS_META"
 type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="GBOS_DATA"
 EOF
 blockdev --rereadpt $TD 2>/dev/null; sleep 2; mdev -s
-P=${TD}p
+case $T in *[0-9]) P=${TD}p;; *) P=$TD;; esac   # nvme0n1p1, mmcblk0p1
 for i in 1 2 3 4; do [ -b $P$i ] || { sleep 2; mdev -s; }; [ -b $P$i ] || die "partition $P$i did not appear"; done
 tool sfdisk -l $TD >> $L/install.log 2>&1
 
@@ -324,8 +353,11 @@ say "Formatting ..."
 tool mkfs.fat -F 32 -n GBOS_EFI ${P}1 >> $L/install.log 2>&1 || die "mkfs GBOS_EFI failed"
 tool mkfs.fat -F 32 -n GBOSSYS ${P}2 >> $L/install.log 2>&1 || die "mkfs GBOSSYS failed"
 # No 'encrypt' feature: vold then behaves as it does on tmpfs (no fscrypt).
-tool mke2fs -F -q -t ext4 -L GBOS_META ${P}3 >> $L/install.log 2>&1 || die "mkfs GBOS_META failed"
-tool mke2fs -F -q -t ext4 -L GBOS_DATA -m 0 ${P}4 >> $L/install.log 2>&1 || die "mkfs GBOS_DATA failed"
+# mke2fs discards the whole partition first (fast on real NVMe/eMMC). QEMU's emulated eMMC "erases" by really writing 0xFF over the range,
+# so a test run (gbos_install_confirm= on the command line, QEMU only) skips it; the 25 GB data partition would otherwise need 25 GB of host disk.
+NODISCARD=; [ -n "$CONFIRM" ] && NODISCARD="-E nodiscard"
+tool mke2fs -F -q -t ext4 $NODISCARD -L GBOS_META ${P}3 >> $L/install.log 2>&1 || die "mkfs GBOS_META failed"
+tool mke2fs -F -q -t ext4 $NODISCARD -L GBOS_DATA -m 0 ${P}4 >> $L/install.log 2>&1 || die "mkfs GBOS_DATA failed"
 tool e2fsck -fn ${P}3 >> $L/install.log 2>&1 || die "fsck GBOS_META failed"
 tool e2fsck -fn ${P}4 >> $L/install.log 2>&1 || die "fsck GBOS_DATA failed"
 
@@ -356,7 +388,7 @@ say ""
 say "=============================================================="
 say " gbOS86 is installed on $TD."
 say " Remove the USB stick, then turn the laptop back on. If it doesn't"
-say " boot gbos, press F12 at the Dell logo and pick the NVMe/UEFI entry"
+say " boot gbos, press F12 at the logo and pick the internal disk's UEFI entry"
 say " (or add \\EFI\\BOOT\\BOOTX64.EFI as a boot option in BIOS setup)."
 say "=============================================================="
 log "install: complete"; sync

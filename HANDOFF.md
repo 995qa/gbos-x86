@@ -264,3 +264,11 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   Still absent because linux-firmware has no such file: pre-production iwlwifi steppings (bz-a0, ma-a0, sc-a0...), SDIO-only brcm/rtl8723*s boards, amdgpu `*_cap.bin`/ip_discovery, ca0132 ctefx-desktop/r3di
   (list: `unresolved.txt` in the fetch work dir). Release **v35** `gbos86-firmware-12dfe670-sof2026.09.2-r4.tar.xz` (sha256 8ad4ce62…); `build.sh` fetches it and re-downloads when `usb/firmware/rtl_nic/rtl8168h-2.fw`
   is missing. Not verified on hardware; the Update path copies firmware only when the stamp changes (it will, this once).
+- 2026-10-17 **eMMC support (installer + boot), kernel #33, tested in QEMU only.** `usb/install.sh` now takes an internal NVMe *or eMMC* as the target: eMMC = `mmcblkN` whose `device/type` is `MMC`
+  (SD cards/readers and the stick are never candidates; `mmcblkNbootX`/`rpmb` don't match), serial = MMC `serial` (CID if empty/zero), partitions `mmcblk0p1..4`, `INSTALL_DISK=` in gbos.cfg chooses among several
+  disks. The host controller driver `sdhci-pci` is a module, so: install.sh binds the stick's module tree and `modprobe`s it if the kernel doesn't have it (works on #32), and **stage0 now loads it before the
+  volume search** (needs the initramfs in the kernel: #33 = #32 + `sdhci`, `sdhci-uhs2`, `cqhci`, `sdhci-pci` in `usb/modroot`, depmod'ed in gbos-kbuild, relinked with `kernel/isa_emu_patch/build.sh`;
+  `usb/out/BOOTX64.EFI` is now #33, `.32` kept). Not supported: ACPI-enumerated eMMC (`MMC_SDHCI_ACPI` is off; some AMD/older Atom). Test: `kernel/isa_emu_test/run_installer_emmc.py usb/out/BOOTX64.EFI --boot`
+  prints `ISA_EMU_INSTALLER_EMMC_PASS` (22 checks: wrong-serial cancel writes nothing, install, GPT/FAT/ext4 verified on the host, update, boot from the eMMC alone, NVMe still works, SD card refused).
+  Test traps: QEMU's emulated eMMC *erases by really writing 0xFF*, so mke2fs's discard of the 25 GB data partition filled a Mac's disk (the test now passes `-E nodiscard` when `gbos_install_confirm=` is set,
+  and aborts if the image passes 6 GB); QEMU stores the eMMC boot partitions first in the image, so the user area (GPT) is not at offset 0. Never run on a real eMMC laptop.

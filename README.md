@@ -151,7 +151,7 @@ suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not c
 | `usb/stage0_init.sh` | stage0: volume detection, logging, partition mounts, switch_root |
 | `usb/hook.sh` | Android workarounds, run by stage0 before switch_root; writes `gbos.rc` (init services) |
 | `usb/early_patch.sh` | Sourced from `gbos.cfg`; binds the patched libz/libcrypto before stage0's first `dmctl` |
-| `usb/install.sh` | NVMe installer and updater (`MODE=install`) |
+| `usb/install.sh` | NVMe/eMMC installer and updater (`MODE=install`) |
 | `usb/apex_patch.sh` | binds the patched libcrypto over the APEX copies (run from init.rc) |
 | `usb/gbos.cfg` | user settings: `MODE` (ask/live/install/boot), `DENSITY`, `RESOLUTION`, `LOAD_I915`, ... |
 | `tools/make_gbos86_image.sh` | builds the flashable gbOS86 USB image into `dist/` |
@@ -166,7 +166,7 @@ suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not c
 | `kernel/configure_whl.py` | kernel config for this laptop (from Google's recovery kernel config) |
 | `kernel/isa_emu_patch/` | instruction emulator + `apply.sh`/`build.sh`, `debug_cmdline.txt` |
 | `kernel/ashmem_shim/` | C memfd ashmem shim |
-| `kernel/isa_emu_test/` | QEMU test of the emulator (16 instructions) |
+| `kernel/isa_emu_test/` | QEMU tests: the emulator (16 instructions), hwdetect, and `run_installer_emmc.py` (installer on an emulated eMMC) |
 | `isa-emu/` | emulator core + host known-answer tests |
 | `tools/` | image extraction (`lp_extract.py`), ISA scanner (`isa_scan.py`), binary patchers |
 | `lapis/` | download script, ISA scan results, QEMU userspace harness |
@@ -189,10 +189,13 @@ The stick has two partitions: **`EFI`** (FAT, `EFI/BOOT/BOOTX64.EFI`) and **`GBO
 `bootdisk.img`, `crossystem`, `libkm_compat.so`, `system_ext_manifest.xml`, `soft_gk`, and the
 `firmware/`, `patched/`, `audio/`, `installer/`, `kmod/` folders. Logs go to `gbos/logs/boot-N/`.
 
-### Install to the internal NVMe
-Set `MODE=install` in `gbos/gbos.cfg` and boot the stick.
-- **No gbos on the NVMe:** it shows the disk's model/serial/size and **erases the whole disk** only after
-  you type the serial number. Layout: `GBOS_EFI` 512M (ESP), `GBOSSYS` 8G FAT32 (the `gbos/` files),
+### Install to the internal disk (NVMe or eMMC)
+Set `MODE=install` in `gbos/gbos.cfg` and boot the stick. The target is the internal NVMe or **eMMC** disk (an eMMC is
+recognised by its MMC device type: SD cards, card readers and the stick are never targets; the eMMC's boot/RPMB areas are left
+alone). With more than one internal disk the installer refuses until `INSTALL_DISK=nvme0n1` (or `mmcblk0`) is set in `gbos.cfg`.
+Minimum disk size 24 GB. eMMC controllers on the PCI bus work (`sdhci-pci`); ACPI-only ones (some AMD and older Atom parts) are not supported.
+- **No gbos on the disk:** it shows the disk's model/serial/size and **erases the whole disk** only after
+  you type the serial number (eMMC: the MMC serial, or its CID when that is empty or zero). Layout: `GBOS_EFI` 512M (ESP), `GBOSSYS` 8G FAT32 (the `gbos/` files),
   `GBOS_META` 64M ext4, `GBOS_DATA` rest ext4. Every copied file is sha256-verified.
 - **gbos already installed:** it asks **1) Update** (keeps data, copies new files and kernel, and saves the
   install's last 3 boots of logs to the stick), **2) Reinstall** (erase; still asks for the serial) or
@@ -260,7 +263,7 @@ newer lapis build:
    data wipe.
 
 ## Safety
-- `install.sh` erases the **entire** NVMe on a fresh install. The serial-number prompt is the only guard.
+- `install.sh` erases the **entire** internal disk (NVMe or eMMC) on a fresh install. The serial-number prompt is the only guard.
 - SELinux runs **permissive**, and the security services are software stand-ins. Don't treat this as a
   secure device.
 - The ISA emulator runs in the kernel's `#UD` handler; a bug there is a kernel bug.
