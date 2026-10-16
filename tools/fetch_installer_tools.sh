@@ -6,7 +6,9 @@
 set -e
 OUT=$(cd "$(dirname "$0")/.." && pwd)/usb/installer
 mkdir -p "$OUT"
-docker run --rm --platform linux/amd64 -v "$OUT":/out alpine:latest sh -c '
+# Fedora/RHEL (SELinux enforcing): the bind mount needs :z (relabels only this repo directory).
+Z=; [ "$(getenforce 2>/dev/null)" = Enforcing ] && Z=:z
+docker run --rm --platform linux/amd64 -v "$OUT":/out$Z alpine:latest sh -c '
 apk add -q sfdisk e2fsprogs dosfstools util-linux-misc >/dev/null
 rm -rf /out/bin /out/lib; mkdir -p /out/bin /out/lib
 for b in sfdisk mke2fs e2fsck mkfs.fat blkid; do

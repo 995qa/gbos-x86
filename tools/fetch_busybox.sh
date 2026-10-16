@@ -6,7 +6,9 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${1:-$ROOT/kernel/out/busybox}
 mkdir -p "$(dirname "$OUT")"
 D=$(mktemp -d)
-docker run --rm --platform linux/amd64 -v "$D":/out debian:trixie-slim sh -c '
+# Fedora/RHEL (SELinux enforcing): bind mounts need :z or the container gets "Permission denied". Only the fresh temp dir.
+Z=; [ "$(getenforce 2>/dev/null)" = Enforcing ] && Z=:z
+docker run --rm --platform linux/amd64 -v "$D":/out$Z debian:trixie-slim sh -c '
   apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends busybox-static >/dev/null &&
   cp /bin/busybox /out/busybox && /out/busybox | head -1'
 cp "$D/busybox" "$OUT"; chmod 755 "$OUT"; rm -rf "$D"

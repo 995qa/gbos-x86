@@ -29,6 +29,7 @@ Then boot the laptop from the stick (F12), turn Secure Boot off, and choose **1*
 from this repo's [release](https://github.com/linuxkid473/gbos-x86/releases)). It streams only the six partitions it needs out of
 Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download. Only the Dell
 Latitude 5300 has been tested; if you try another laptop, please post its `gbos/logs/boot-N/hwdetect.txt` in an issue.
+Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind mounts of this repo's own folders automatically; don't disable SELinux.
 
 ## Status
 

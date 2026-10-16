@@ -52,7 +52,9 @@ du -sh "$STAGE/gbos/gbos/super.img" "$STAGE/gbos"
 # 3. Assemble the GPT image (FAT32 partitions built as files, then placed at their offsets)
 echo "== image"
 IMG=$OUT/$NAME.img
-docker run --rm --platform linux/amd64 -v "$OUT":/o alpine:latest sh -c '
+# Fedora/RHEL (SELinux enforcing): the bind mount needs :z; relabel only when OUT is inside this repo (default dist/).
+Z=; if [ "$(getenforce 2>/dev/null)" = Enforcing ]; then case $OUT in "$ROOT"/*) Z=:z;; esac; fi
+docker run --rm --platform linux/amd64 -v "$OUT":/o$Z alpine:latest sh -c '
 set -e
 apk add -q mtools dosfstools sfdisk coreutils >/dev/null
 cd /o; S='"$NAME"'.stage

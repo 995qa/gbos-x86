@@ -5,8 +5,11 @@ set -e
 IN=$(cd "$(dirname "$1")" && pwd)/$(basename "$1"); OUT=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 V=gbos-work-$$
+# Fedora/RHEL (SELinux enforcing): bind mounts need :z. Relabel only directories inside this repo, never others (e.g. $HOME).
+SEL=0; [ "$(getenforce 2>/dev/null)" = Enforcing ] && SEL=1
+z() { if [ $SEL = 1 ]; then case $1 in "$ROOT"/*|"$ROOT") printf '%s' "$2";; esac; fi; }
 docker volume create $V >/dev/null
-docker run --rm --cap-add SYS_ADMIN --cap-add MAC_ADMIN --cap-add SETFCAP -v $V:/work -v "$ROOT":/host:ro -v "$(dirname "$IN")":/in:ro -v "$(dirname "$OUT")":/out gbos-erofs sh -ec "
+docker run --rm --cap-add SYS_ADMIN --cap-add MAC_ADMIN --cap-add SETFCAP -v $V:/work -v "$ROOT":/host:ro$(z "$ROOT" ,z) -v "$(dirname "$IN")":/in:ro$(z "$IN" ,z) -v "$(dirname "$OUT")":/out$(z "$OUT" :z) gbos-erofs sh -ec "
   mkdir /work/tree
   fsck.erofs --extract=/work/tree --force --preserve --xattrs /in/$(basename "$IN") >/work/extract.log 2>&1 || { tail -5 /work/extract.log; exit 1; }
   python3 -I /host/tools/tree_manifest.py /work/tree > /work/m1.txt
