@@ -27,7 +27,7 @@ git clone https://github.com/linuxkid473/gbos-x86 && cd gbos-x86
 Then boot the laptop from the stick (F12), turn Secure Boot off, and choose **1** (live, nothing is written to the laptop).
 `./build.sh --dry-run` shows what it would download (Google's 7.7 GB image, ~1 MB busybox, 14 MB of kernel modules and 53 MB of firmware
 from this repo's [release](https://github.com/linuxkid473/gbos-x86/releases)). It streams only the six partitions it needs out of
-Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download. Seven laptops have been
+Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download. Eight machines have been
 tried (see [Tested laptops](#tested-laptops)); if you try another, please post its `gbos/logs/boot-N/hwdetect.txt` in an issue.
 Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind mounts of this repo's own folders automatically; don't disable SELinux.
 
@@ -54,7 +54,7 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 | Auth-bound keystore keys | `soft_gk`'s auth tokens aren't trusted by the software KeyMint |
 | Google's on-device AI (Magic Pointer, AICore) | Google's servers refuse it without hardware key attestation, which no non-Google laptop can provide. Optional replacement, chosen in the installer: the AI features answer through an OpenAI-compatible API **you** provide (address, key, model; a Gemini API key works). Text and pictures you point at go to that provider; see [`localai/README.md`](localai/README.md) (**experimental, not yet confirmed on hardware**) |
 | OS updates | Built-in OTA can't work; manual process only (see "Updating Googlebook OS") |
-| Other laptops | Three of seven tried laptops work fully, three partly or pending, one not; see [Tested laptops](#tested-laptops). The CPU-emulation kernel should help any pre-2021 Intel CPU |
+| Other laptops | Four of eight tried machines work fully, three partly or pending, one not; see [Tested laptops](#tested-laptops). The CPU-emulation kernel should help any pre-2021 Intel CPU |
 
 ## How it works
 
@@ -126,6 +126,7 @@ Reports from people who booted the stick (2026-10-17). A row says what was repor
 | Dell Latitude 5300 | Core i5-8365U, 16 GB | **Works** | Everything tested: Wi-Fi, Bluetooth, sound, touchpad, brightness, battery, install | Suspend. The maintainer's machine |
 | Acer Aspire Lite AL15-52 | Core i5-1235U, 8 GB | **Works** | Wi-Fi, display, touchpad, keyboard, sound, brightness, camera, Bluetooth | Needed two firmware fixes (Realtek Wi-Fi; Intel AX201 Bluetooth name `ibt-0040-1050.sfi`), both in firmware v34+. Older sticks need a rebuild or an Update from a fresh stick |
 | Lenovo ThinkPad T470 | Intel 7th gen | **Works** | Reported as working with no setup | Short report |
+| Intel NUC8BEH (mini PC) | Core i3-8109U, 8 GB | **Works** (live) | Wi-Fi, Bluetooth, display and brightness (external monitor), keyboard (external), USB ports | Sound not tested. SATA M.2 SSD: the installer only targets NVMe/eMMC, so live only |
 | HP OmniBook 7 | Core Ultra 5 225U, 16 GB | Partly | Touchpad, keyboard, brightness, display | Wi-Fi (Intel BE201). Sound, webcam, Bluetooth not tested |
 | Dell XPS 16 (2026) | Intel Core Ultra | Partly | Boots and runs | Screen refresh rate, Wi-Fi, camera. A kernel option reportedly fixes the screen: try it with `MODOPTS` in `gbos.cfg` |
 | Framework Laptop 13 Pro | Core Ultra 5 325 (Panther Lake), 16 GB | Fix pending | Boots | Black screen on sticks without the Panther Lake `xe` firmware (GuC); firmware v35 has it. Awaiting confirmation |
@@ -158,7 +159,7 @@ The kernel (#31) builds drivers for most Intel-era laptops as **modules**, and b
 | Hotkeys, fans, rfkill | Dell, HP, ThinkPad, IdeaPad, Asus, Acer, Samsung, MSI, Sony, Fujitsu, LG, Intel HID/VBTN |
 | Other | SD card readers (Realtek, SDHCI), USB webcams (UVC), Ethernet (r8169, e1000e, igc, USB r8152 and friends) |
 
-**Honest limits.** Seven laptops have been booted (below); anything not on that list is built and wired but untested on
+**Honest limits.** Eight machines have been booted (below); anything not on that list is built and wired but untested on
 hardware. Sound on SOF machines needs the codec's mixer controls to match the generated config (best effort);
 suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not covered. Build the payload with
 `tools/fetch_firmware.sh` (firmware, not committed) and `kernel/isa_emu_patch/build_generic*.sh` (modules, not committed).

@@ -287,3 +287,4 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
 - 2026-10-17 **Tested-laptops list published (README "Tested laptops", gbos86.com/hardware, docs page `tested-laptops`, overview/safety/FAQ/home wording).** One data file, `website/laptops.py`, feeds the site; README has a hand copy.
   Rows: Latitude 5300 (works), Acer Aspire Lite AL15-52 (works, BT after the ibt-0040-1050 fix), ThinkPad T470 (works, short report), HP OmniBook 7 / Core Ultra 5 225U (partly: no Wi-Fi, BE201), XPS 16 (partly: refresh rate, Wi-Fi, camera),
   Framework 13 Pro (fix pending: xe firmware), HP 14-ne0013dx (no, no logs). Reporters' Discord names are not published. Not deployed to the server from here (needs HOST/SSH_KEY).
+- 2026-10-17 Tested-laptops list: added Intel NUC8BEH (i3-8109U, live USB kernel #32: Wi-Fi, Bluetooth, display, USB work; SATA SSD so no install). Now 8 machines, 4 fully working.

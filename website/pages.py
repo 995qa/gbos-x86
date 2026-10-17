@@ -103,7 +103,7 @@ WELCOME_POST = '''Welcome to the gbOS86 community.
 
 gbOS86 runs Google's Googlebook OS on ordinary Intel laptops. It boots from a USB stick (live), installs to the internal SSD, or updates an existing install without touching your data.
 
-**What works today:** Intel 6th gen and newer, Intel graphics, boot-time hardware detection for Wi-Fi, Bluetooth, sound, touchpad, brightness and display. Seven laptops have been tried so far (Dell Latitude 5300, Acer Aspire Lite AL15-52 and ThinkPad T470 work; others partly or not yet): https://gbos86.com/hardware. Your reports matter.
+**What works today:** Intel 6th gen and newer, Intel graphics, boot-time hardware detection for Wi-Fi, Bluetooth, sound, touchpad, brightness and display. Eight machines have been tried so far (Dell Latitude 5300, Acer Aspire Lite AL15-52, ThinkPad T470 and Intel NUC8BEH work; others partly or not yet): https://gbos86.com/hardware. Your reports matter.
 
 **How to help**
 - Read the install guide: https://gbos86.com/docs/install
@@ -130,7 +130,7 @@ def home(req, cats, latest, news, st):
 
 <section class="demo card"><div class="demo-text"><p class="eyebrow">Running on a Dell Latitude 5300</p><h2>See it running</h2>
 <p>Googlebook OS running on a Dell Latitude 5300 business laptop (Intel i5-8365U): the desktop and taskbar, the Bluetooth and Wi-Fi quick settings, the touchpad and keyboard.</p>
-<p class="mut">43 seconds, no sound, filmed on the laptop itself. Seven laptops have been tried so far, see the <a href="/hardware#tested">list</a>; <a href="/hardware">help us find out about yours</a>.</p></div>
+<p class="mut">43 seconds, no sound, filmed on the laptop itself. Eight machines have been tried so far, see the <a href="/hardware#tested">list</a>; <a href="/hardware">help us find out about yours</a>.</p></div>
 <video controls preload="metadata" playsinline poster="/static/demo-poster.jpg" width="320" height="568"><source src="/static/demo.mp4" type="video/mp4">Your browser can't play this video. <a href="/static/demo.mp4">Download it</a>.</video></section>
 
 <section class="grid3">
@@ -145,7 +145,7 @@ def home(req, cats, latest, news, st):
 
 <section class="card"><h2>Forums</h2><ul class="catlist">%s</ul></section>
 
-<section class="notice"><strong>Tried so far:</strong> Dell Latitude 5300, Acer Aspire Lite AL15-52 and Lenovo ThinkPad T470 work; HP OmniBook 7 and Dell XPS 16 partly; Framework 13 Pro has a fix pending; HP 14-ne0013dx does not. See the <a href="/hardware#tested">full list</a>. Post your laptop in
+<section class="notice"><strong>Tried so far:</strong> Dell Latitude 5300, Acer Aspire Lite AL15-52, Lenovo ThinkPad T470 and Intel NUC8BEH work; HP OmniBook 7 and Dell XPS 16 partly; Framework 13 Pro has a fix pending; HP 14-ne0013dx does not. See the <a href="/hardware#tested">full list</a>. Post your laptop in
 <a href="/forum/c/hardware">Hardware Compatibility</a> and attach <code>hwdetect.txt</code>.</section>''' % (lat, nw, st['members'], st['threads'], st['posts'], cat_rows)
 
 
@@ -317,7 +317,7 @@ sudo dd if=gbOS86.img of=/dev/sdX bs=4M status=progress   # Linux</code></pre>
 def hardware(req):
     return '''<div class="doc"><h1>Hardware</h1>
 <p class="lead">gbOS86 targets <strong>Intel 6th-gen (Skylake) and newer</strong> laptops with Intel graphics. At every boot it reads your devices and loads matching drivers.</p>
-<div class="notice"><strong>Be realistic:</strong> seven laptops have been tried, three of them fully working. Newer chips (Core Ultra, Wi-Fi 7) are the weak spot. Reports from your laptop make this table real: <a href="/forum/c/hardware">post yours</a>.</div>
+<div class="notice"><strong>Be realistic:</strong> eight machines have been tried, four of them fully working. Newer chips (Core Ultra, Wi-Fi 7) are the weak spot. Reports from your laptop make this table real: <a href="/forum/c/hardware">post yours</a>.</div>
 <h2 id="tested">Laptops people have tried</h2>
 ''' + laptops.table_html() + '''
 <h2>What the drivers cover</h2>
@@ -356,7 +356,7 @@ def download(req):
 
 def faq(req):
     qa = [('Is this official?', 'No. gbOS86 is an independent community project and is not affiliated with or endorsed by Google.'),
-          ('Will it work on my laptop?', 'If it has an Intel 6th-gen or newer CPU and Intel graphics, probably yes; see <a href="/hardware">Hardware</a>. Seven laptops have been tried (three work fully; newer Core Ultra machines are the weak spot), see the <a href="/hardware#tested">list</a>. Try live mode first.'),
+          ('Will it work on my laptop?', 'If it has an Intel 6th-gen or newer CPU and Intel graphics, probably yes; see <a href="/hardware">Hardware</a>. Eight machines have been tried (four work fully; newer Core Ultra machines are the weak spot), see the <a href="/hardware#tested">list</a>. Try live mode first.'),
           ('Can I break my laptop?', 'Live mode writes nothing to the internal drive. Installing erases the internal drive, and only after you type its serial number on the laptop. Back up first.'),
           ('Why is the first boot slow?', 'Google\'s OS uses CPU instructions older chips lack. The kernel emulates them, which costs time. gbOS86 patches the worst offenders and loads those patches before they can slow boot.'),
           ('Does Wi-Fi / Bluetooth / sound work?', 'On the Dell Latitude 5300 and the Acer Aspire Lite AL15-52, yes (the Acer needed firmware fixes that are now in the build). On Core Ultra machines Wi-Fi is the open problem. See the <a href="/hardware#tested">tested list</a> and send us your <code>hwdetect.txt</code>.'),

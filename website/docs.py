@@ -25,7 +25,7 @@ def overview():
 <h2>Status</h2>
 <table class="spec"><tbody>
 <tr><td>Works (Dell Latitude 5300)</td><td>Boot to desktop, setup and Google sign-in, Play Store installs, Wi-Fi, Bluetooth, sound (speakers, headset jack, internal mic, HDMI), touchpad with gestures, battery/AC, persistent data on the internal NVMe drive, screen-lock password, correct display colours.</td></tr>
-<tr><td>Works on other laptops</td><td>Acer Aspire Lite AL15-52 (i5-1235U) and Lenovo ThinkPad T470, as reported by the people who tried them. See <a href="/docs/tested-laptops">Tested laptops</a>.</td></tr>
+<tr><td>Works on other laptops</td><td>Acer Aspire Lite AL15-52 (i5-1235U), Lenovo ThinkPad T470 and an Intel NUC8BEH (live from USB; its SATA drive cannot be installed to), as reported by the people who tried them. See <a href="/docs/tested-laptops">Tested laptops</a>.</td></tr>
 <tr><td>Partly works</td><td>HP OmniBook 7 (no Wi-Fi) and Dell XPS 16 (screen refresh, Wi-Fi and camera). A Framework Laptop 13 Pro had a black screen, now fixed in the firmware and waiting for confirmation; an HP 14-ne0013dx did not work. Newer Core Ultra machines are the weak spot.</td></tr>
 <tr><td>Not done</td><td>Suspend/resume, Night Light, fingerprint readers, IPU6 cameras, discrete GPUs, OTA updates (manual updates only), Linux Terminal VM, auth-bound keystore keys.</td></tr></tbody></table>
 <h2>The pages in this section</h2>
@@ -251,7 +251,7 @@ def safety():
 <li>The CPU emulator runs inside the kernel; a bug there is a kernel bug.</li></ul>
 <h2>Compatibility limits</h2>
 <ul><li>Intel x86-64 only. No AMD CPUs, no ARM.</li><li>Installing needs an internal NVMe drive (live mode works without).</li><li>Suspend and resume, fingerprint readers, IPU6 cameras and discrete GPUs are not supported.</li>
-<li>Seven laptops have been tried, three of them fully working; see <a href="/docs/tested-laptops">Tested laptops</a>. Anything not on that list is untested.</li></ul>
+<li>Eight machines have been tried, four of them fully working; see <a href="/docs/tested-laptops">Tested laptops</a>. Anything not on that list is untested.</li></ul>
 <h2>Legal</h2>
 <p>gbOS86 is an independent community project, not affiliated with or endorsed by Google. Googlebook OS, Android and Chrome are Google's. The built image contains Google's OS and is not redistributed. The source repository includes a small number of patched Google libraries (a patched libz, libcrypto and a software KeyMint library) that the build requires; Google's own terms apply to them.</p>'''
 
