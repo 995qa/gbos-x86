@@ -8,6 +8,8 @@
 #     `modprobe -a` them, repeated because a loaded driver (HDA controller, USB hub, ...) creates new devices.
 #     This finds the right Wi-Fi, Bluetooth, audio (HDA or SOF), touchpad/keyboard (I2C-HID, ISH, PS/2),
 #     laptop hotkey/backlight (dell/hp/thinkpad/ideapad/asus/...), card-reader and webcam drivers on any machine.
+#     MODOPTS="xe.enable_psr=0 ..." in gbos.cfg (the same module.param=value spelling as on a Linux kernel command line)
+#     loads those modules first with the given parameters (gbos_modopts), so a screen/driver quirk fix needs no kernel rebuild.
 #  3. firmware: the kernel's firmware loader looks in gbos/firmware (a copy of linux-firmware, trimmed).
 #  4. gbos_hw_report: writes hwdetect.txt next to the other boot logs: what got a driver, what didn't,
 #     which firmware files were missing.
@@ -32,6 +34,22 @@ gbos_load_opmodes() {
   for m in $(dmesg | sed -n 's/.*op_mode \(iwl[a-z]*\).*/\1/p' | sort -u); do
     grep -q "^$m " /proc/modules && continue
     modprobe -q $m && log "hwdetect: loaded $m (op_mode announced by iwlwifi)" || log "hwdetect: modprobe $m FAILED"
+  done
+}
+
+# MODOPTS="module.param=value ..." (gbos.cfg): modprobe each named module with its parameters before the coldplug loads it
+# without. Done with `modprobe module param=value` (not /etc/modprobe.d: /etc is read-only under Android's init).
+# A module already loaded by stage0 keeps its parameters; that is logged. Built-in (non-module) parameters cannot be set here.
+gbos_modopts() {
+  [ -n "$MODOPTS" ] || return 0
+  echo "$MODOPTS" | tr ' ' '\n' | awk 'index($0,".")>1 && index($0,"=")>index($0,".") {i=index($0,"."); m=substr($0,1,i-1); o[m]=o[m] " " substr($0,i+1)} END{for(m in o) print m o[m]}' \
+    | while read m opts; do
+        mu=$(echo $m | tr - _)
+        if grep -q "^$mu " /proc/modules; then log "hwdetect: MODOPTS: $m is already loaded, '$opts' NOT applied"; continue; fi
+        modprobe -q $m $opts && log "hwdetect: MODOPTS: loaded $m $opts" || log "hwdetect: MODOPTS: modprobe $m $opts FAILED"
+      done
+  for kv in $MODOPTS; do
+    case $kv in ?*.?*=*) ;; *) log "hwdetect: MODOPTS entry ignored (want module.param=value): $kv";; esac
   done
 }
 
@@ -90,6 +108,17 @@ gbos_hw_report() {
     echo "== sound"; cat /proc/asound/cards 2>&1
     echo "== rfkill"; for r in /sys/class/rfkill/*; do [ -e $r ] && echo "$(cat $r/name) $(cat $r/type) soft=$(cat $r/soft) hard=$(cat $r/hard)"; done
     echo "== missing firmware"; dmesg | grep -iE 'firmware.*(failed|not found|-2\))|Direct firmware load.*failed|failed to load.*(ucode|\.bin|\.sfi)' | sort -u
+    echo "== MODOPTS"; echo "${MODOPTS:-(none)}"
+    echo "== display (drm connectors: status, enabled, first modes)"
+    for c in /sys/class/drm/card*-*; do
+      [ -e $c/status ] && { echo "${c##*/} status=$(cat $c/status) enabled=$(cat $c/enabled 2>/dev/null)"; head -6 $c/modes 2>/dev/null | sed 's/^/    /'; }
+    done
+    echo "== video devices (cameras)"; for v in /sys/class/video4linux/*; do [ -e $v ] && echo "${v##*/} $(cat $v/name)"; done
+    for m in xe i915; do
+      [ -d /sys/module/$m/parameters ] && { echo "== $m parameters"; for p in /sys/module/$m/parameters/*; do echo "${p##*/}=$(cat $p 2>/dev/null)"; done; }
+    done
+    echo "== driver messages (wifi, graphics, camera, audio, bluetooth; first 250)"
+    dmesg | grep -iE 'iwlwifi|iwlmvm|iwlmld|\bxe [0-9a-f:.]+|\[drm|ipu[0-9]|intel-ipu|ivsc|sof-audio|snd_sof|sof-firmware|soundwire|cs42l43|Bluetooth: hci|btintel|No config found|unsupported' | head -250
     echo "== lsmod"; lsmod
   } > $L/hwdetect.txt 2>&1
   log "hwdetect: report written (hwdetect.txt)"
@@ -99,7 +128,7 @@ gbos_hw_report() {
 gbos_hwdetect() {
   [ -f $G/gbos.cfg ] && [ "$HWDETECT" = 0 ] && { log "hwdetect: disabled (HWDETECT=0)"; return 0; }
   [ -d $G/firmware ] && echo -n $G/firmware > $GBOS_FWPATH
-  gbos_modules_mount && gbos_coldplug && gbos_wait_devices ${1:-15}
+  gbos_modules_mount && gbos_modopts && gbos_coldplug && gbos_wait_devices ${1:-15}
   # The brightness keys/backlight need acpi_video when the panel has no native backlight.
   [ -d /sys/class/backlight ] && [ -z "$(ls /sys/class/backlight 2>/dev/null)" ] && modprobe -q video 2>/dev/null
   gbos_hw_report
