@@ -1,7 +1,11 @@
 #!/bin/sh
-# gbOS86: one-command build.   ./build.sh            -> dist/gbOS86-YYYYMMDD.img (about 6.7 GB), ready to flash.
-#   ./build.sh -y          don't ask before downloading
-#   ./build.sh --dry-run   show what would be downloaded and built, change nothing
+# gbOS86: one-command build.
+#   ./build.sh                     -> interactive menu (standard or looper, custom userdata size)
+#   ./build.sh --standard          -> dist/gbOS86-YYYYMMDD.img (live USB installer, MODE=ask)
+#   ./build.sh --looper            -> dist/gbOS86-looper-YYYYMMDD.img (persistent /data, MODE=boot)
+#   ./build.sh --looper --data-size 32
+#   ./build.sh -y                  don't ask before downloading (uses standard if not specified)
+#   ./build.sh --dry-run           show what would be downloaded and built, change nothing
 #
 # What it does (each step is skipped when its result already exists, so re-running is cheap and resumable):
 #   1. Google's OS: downloads Google's public Googlebook recovery image (7.7 GB) and extracts only the six partitions
@@ -10,17 +14,59 @@
 #   3. Kernel modules (14 MB) and firmware (53 MB) built from this repo's sources, from the GitHub release.
 #   4. Assembles the flashable image with tools/make_gbos86_image.sh (the kernel, patched libraries and installer
 #      tools are already in this repository).
-# Needs: macOS or Linux, docker (running), python3, curl, tar, xz, ~35 GB free disk. The image holds Google's OS and
-# patched Google libraries: for your own use, don't share it.
+# Needs: macOS or Linux, docker (running), python3, curl, tar, xz, ~35 GB free disk.
 set -e
 cd "$(dirname "$0")"
-YES=0; DRY=0
-for a in "$@"; do case $a in -y|--yes) YES=1;; --dry-run) DRY=1;; -h|--help) sed -n '2,15p' "$0"; exit 0;; esac; done
+
+YES=0
+DRY=0
+BUILD_TYPE=""
+DATA_GB=64
+
+# Parse command line options
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -y|--yes) YES=1;;
+    --dry-run) DRY=1;;
+    --standard) BUILD_TYPE="standard";;
+    --looper|--loopback) BUILD_TYPE="looper";;
+    --data-size) shift; DATA_GB="$1";;
+    --data-size=*) DATA_GB="${1#*=}";;
+    -h|--help) sed -n '2,16p' "$0"; exit 0;;
+    *) echo "Unknown option: $1"; exit 1;;
+  esac
+  shift
+done
+
+# Interactive selection if build type is not pre-set via flags
+if [ -z "$BUILD_TYPE" ]; then
+  if [ $YES = 1 ]; then
+    BUILD_TYPE="standard"
+  else
+    printf '\n================ gbOS86 Image Target ================\n'
+    echo "  1) Standard image (live USB + installer menu, MODE=ask)"
+    echo "  2) Loopback persistent image (MODE=boot, persistent /data and /metadata)"
+    printf 'Choose target [1/2, default: 1]: '
+    read -r ans
+    case "$ans" in
+      2|looper|loopback)
+        BUILD_TYPE="looper"
+        printf 'Enter userdata (/data) size in GB (sparse, expands as needed) [default: 64]: '
+        read -r user_sz
+        case "$user_sz" in
+          ''|*[!0-9]*) [ -n "$user_sz" ] && echo "Invalid number; using default 64 GB." ;;
+          *) [ "$user_sz" -gt 0 ] && DATA_GB="$user_sz" ;;
+        esac
+        ;;
+      *)
+        BUILD_TYPE="standard"
+        ;;
+    esac
+  fi
+fi
 
 REL=https://github.com/linuxkid473/gbos-x86/releases/download/v32
 MODS=gbos86-modules-6.18.21-gbos-whl.tar.xz;               MODS_SHA=876705e2f707bde12ef558b0759f2b3c62db287e8163183d767d5f53fa3ffdac
-# v33 firmware = v32 + Realtek rtw89 8852A/B/BT/C and 8851B (v32's fetch regex skipped them: no Wi-Fi on RTL8852BE laptops)
-# v35 firmware = everything the shipped kernel modules ask for (tools/fw_wanted.py) + run-time-named families (amdgpu, rtl_nic, ath12k, cirrus, ...)
 REL_FW=https://github.com/linuxkid473/gbos-x86/releases/download/v35
 FW=gbos86-firmware-12dfe670-sof2026.09.2-r4.tar.xz;        FW_SHA=8ad4ce620194e6555fe747bff95eb75b74c3c8f198ff7e3d5280c02f37bb1463
 GOOGLE=https://dl.google.com/device/recovery/lapis-user/16452207/recovery.zip
@@ -47,6 +93,7 @@ have_parts || NEED="$NEED\n  - Google's recovery image: $GOOGLE (7.7 GB, from dl
 if [ -z "$NEED" ]; then say "everything is already downloaded"; else
   printf 'This will download:%b\n' "$NEED"
 fi
+
 FREE_KB=$(df -k . | awk 'NR==2{print $4}'); [ "$FREE_KB" -gt 36000000 ] || printf '\nWARNING: only %d GB free here; about 35 GB are needed.\n' $((FREE_KB / 1000000))
 [ $DRY = 1 ] && { echo "(dry run: nothing changed)"; exit 0; }
 if [ -n "$NEED" ] && [ $YES = 0 ]; then printf '\nContinue? [y/N] '; read -r a; case $a in y|Y|yes) ;; *) exit 1;; esac; fi
@@ -68,7 +115,7 @@ if [ ! -f usb/firmware/rtl_nic/rtl8168h-2.fw ]; then
   fetch "$REL_FW/$FW" "build/dl/$FW" "$FW_SHA"; tar -xJf "build/dl/$FW" -C usb
 else say "    firmware: present"; fi
 
-say "4/4 building the image"
-sh tools/make_gbos86_image.sh
+say "4/4 building the image ($BUILD_TYPE)"
+sh tools/make_gbos86_image.sh --type "$BUILD_TYPE" --data-size "$DATA_GB"
 echo
-echo "Done. Flash the .img in dist/ to a USB stick of 8 GB or more (balenaEtcher, Rufus, or dd), then boot it (F12)."
+echo "Done. Flash the .img in dist/ to a USB stick or target drive (balenaEtcher, Rufus, or dd), then boot it."
