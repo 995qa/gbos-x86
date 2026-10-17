@@ -89,7 +89,7 @@ table.spec td:first-child{white-space:normal}th,td{padding:10px}table.forum .num
 .laptops{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:16px 0}
 .laptops .lap{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin:0;display:flex;flex-direction:column;gap:10px}
 .lap h3{margin:0;font-size:18px;line-height:1.25}.lap .cpu{margin:0;color:var(--mut);font-size:14px}
-.lap .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.lap .lap-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .lap dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:15px}.lap dt{color:var(--mut);font-weight:600;white-space:nowrap}.lap dd{margin:0}
 .lap .note{margin:0;font-size:14px;color:var(--mut);border-top:1px solid var(--line);padding-top:10px}
 .badge{flex:none;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}

@@ -53,7 +53,7 @@ def table_html():
             rows += '<dt>Works</dt><dd>%s</dd>' % escape(l['works'])
         if l['broken']:
             rows += '<dt>Not working</dt><dd>%s</dd>' % escape(l['broken'])
-        cards.append('<article class="lap"><div class="top"><div><h3>%s</h3><p class="cpu">%s</p></div><span class="badge %s">%s</span></div>'
+        cards.append('<article class="lap"><div class="lap-head"><div><h3>%s</h3><p class="cpu">%s</p></div><span class="badge %s">%s</span></div>'
                      '<dl>%s</dl><p class="note">%s</p></article>' % (escape(l['name']), escape(l['cpu']), l['status'], STATUS[l['status']], rows, l['notes']))
     return ('<div class="laptops">%s</div>'
             '<p class="mut">Based on reports from people who tried it, last updated %s. Results change as fixes land: a card says what was reported, not what the latest build can do. '
