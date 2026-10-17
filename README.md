@@ -5,7 +5,7 @@
 
 Google's **Googlebook OS** (the `lapis` Android desktop build) running on an ordinary laptop: a
 **Dell Latitude 5300** (Intel i5-8365U "Whiskey Lake", UHD 620, 16 GB). It boots from a USB stick or
-from the internal NVMe, reaches the desktop, and runs Play Store apps.
+from the internal NVMe/eMMC, reaches the desktop, and runs Play Store apps.
 
 **Website and community:** https://gbos86.com (guides, hardware list, forum) | Discord: https://discord.gg/h9AD9fSnDT
 
@@ -21,22 +21,38 @@ stored in this repository: the script downloads Google's public recovery image i
 
 ```sh
 git clone https://github.com/linuxkid473/gbos-x86 && cd gbos-x86
-./build.sh                      # asks before downloading; writes dist/gbOS86-YYYYMMDD.img (6.7 GB)
-# flash it: balenaEtcher / Rufus, or  sudo dd if=dist/gbOS86-*.img of=/dev/rdiskN bs=4m
+./build.sh
 ```
-Then boot the laptop from the stick (F12), turn Secure Boot off, and choose **1** (live, nothing is written to the laptop).
-`./build.sh --dry-run` shows what it would download (Google's 7.7 GB image, ~1 MB busybox, 14 MB of kernel modules and 53 MB of firmware
+
+When you run `./build.sh`, it prompts you to select the image type:
+1. **Standard image (`dist/gbOS86-YYYYMMDD.img`)**: Live USB installer. Boots into the 10-second gbOS86 boot menu (`MODE=ask`), allowing you to run live in RAM or install/update on the internal SSD.
+2. **Loopback persistent image (`dist/gbOS86-looper-YYYYMMDD.img`)**: Portable standalone OS. Boots directly into Android (`MODE=boot`) with persistent ext4 `/metadata` and `/data`. All installed apps, accounts, and settings persist directly on the USB stick.
+
+You can also pass CLI arguments directly:
+```sh
+./build.sh --standard
+./build.sh --looper --data-size 64     # 64 GB sparse userdata (only ~6.5 GB on host disk)
+```
+
+Then flash the generated `.img` file from `dist/`:
+```sh
+# Flash with balenaEtcher, Rufus, or dd:
+sudo dd if=dist/gbOS86-*.img of=/dev/rdiskN bs=4m status=progress
+```
+Boot the laptop from the stick (**F12** at the logo, Secure Boot off).
+
+`./build.sh --dry-run` shows what it would download (Google's 7.7 GB image, ~1 MB busybox, 14 MB of kernel modules and 70 MB of firmware
 from this repo's [release](https://github.com/linuxkid473/gbos-x86/releases)). It streams only the six partitions it needs out of
-Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download. Only the Dell
-Latitude 5300 has been tested; if you try another laptop, please post its `gbos/logs/boot-N/hwdetect.txt` in an issue.
+Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download.
+Only the Dell Latitude 5300 has been tested; if you try another laptop, please post its `gbos/logs/boot-N/hwdetect.txt` in an issue
 Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind mounts of this repo's own folders automatically; don't disable SELinux.
 
 ## Status
 
 | Works | Notes |
 |---|---|
-| Boot to desktop, setup, Google sign-in | From USB or NVMe |
-| Persistent data | NVMe install: `/data` and `/metadata` are ext4 partitions |
+| Boot to desktop, setup, Google sign-in | From USB or internal NVMe/eMMC |
+| Persistent data | NVMe/eMMC install or USB looper image: `/data` and `/metadata` are ext4 partitions |
 | Wi-Fi | Intel 9560 (CNVi `8086:9df0`) + linux-firmware |
 | Bluetooth | Intel 9560 USB (`8087:0aaa`) via our `btusb` |
 | Sound | Legacy HDA + Realtek ALC3254, speakers, headset jack, internal mic, HDMI |
@@ -61,12 +77,12 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 UEFI firmware
  └─ EFI/BOOT/BOOTX64.EFI      our kernel (android17-6.18 + patches) with stage0 built in as initramfs
      └─ stage0 (usb/stage0_init.sh, busybox)
-         ├─ finds the gbos volume: USB stick (FAT label GBOS) or NVMe install (GBOSSYS)
+         ├─ finds the gbos volume: USB stick (FAT label GBOS) or system volume (GBOSSYS)
          ├─ loads i915, logs to gbos/logs/boot-N/
-         ├─ MODE=install → gbos/install.sh (NVMe installer/updater), never boots Android
+         ├─ MODE=install → gbos/install.sh (NVMe/eMMC installer/updater), never boots Android
          ├─ mounts super.img's erofs partitions (system, vendor, product, ...) via loop + dm-linear
          ├─ runs gbos/hook.sh (all Android-side workarounds, editable without a kernel rebuild)
-         ├─ mounts /data, /metadata (NVMe ext4, else tmpfs)
+         ├─ mounts /data, /metadata (ext4 partitions if present, else tmpfs)
          └─ switch_root → /system/bin/init selinux_setup   (Google's Android init, unmodified)
 ```
 
@@ -172,43 +188,47 @@ suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not c
 
 ## Using it
 
-### gbOS86 USB image (live + installer)
-`tools/make_gbos86_image.sh` builds `dist/gbOS86-YYYYMMDD.img` (~6.3 GiB) from the repo plus Google's
-extracted partitions (`lapis/parts/*_a.img`). Write it to an 8 GB+ stick with balenaEtcher, Rufus or `dd`.
-Booting it shows the **gbOS86 menu** (10 s timeout): **1** live from the USB (nothing saved), **2** install
-or update on the internal SSD, **3** boot the installed system (offered, and the default, when one exists).
-`MODE` in `gbos/gbos.cfg` skips the menu (`live`, `install`, `boot`; `ask` = menu). The image holds Google's
-OS and patched Google libraries: for your own use only.
+### gbOS86 USB image variants
 
-### Boot from the USB stick
-The stick has two partitions: **`EFI`** (FAT, `EFI/BOOT/BOOTX64.EFI`) and **`GBOS`** (FAT32: `/busybox`,
-`gbos/`). The firmware boots the **EFI partition's** copy. Pick the stick with **F12** at the Dell logo.
+#### 1. Standard Live & Installer Image (`gbOS86-YYYYMMDD.img`)
+- **p1 (`EFI`)**: 256 MiB FAT32 ESP.
+- **p2 (`GBOS`)**: 6 GiB FAT32 (`super.img`, installer, patches).
+Booting shows the **gbOS86 boot menu** with a 10-second timeout:
+- **1) Live from USB** (runs purely in RAM/tmpfs; nothing saved).
+- **2) Install or update on internal SSD** (erases the internal disk and installs gbOS86).
+- **3) Boot the installed system** (offered and default when an internal install exists).
 
-`gbos/` holds: `super.img` + `super.layout`, `hook.sh`, `install.sh`, `apex_patch.sh`, `gbos.cfg`,
-`bootdisk.img`, `crossystem`, `libkm_compat.so`, `system_ext_manifest.xml`, `soft_gk`, and the
-`firmware/`, `patched/`, `audio/`, `installer/`, `kmod/` folders. Logs go to `gbos/logs/boot-N/`.
+#### 2. Looper Persistent Image (`gbOS86-looper-YYYYMMDD.img`)
+Creates a full portable install directly inside the flash drive image, matching the internal disk layout:
+- **p1 (`GBOS_EFI`)**: 512 MiB FAT32 ESP.
+- **p2 (`GBOSSYS`)**: 8 GiB FAT32 (`super.img`, firmware, modules, `MODE=boot`).
+- **p3 (`GBOS_META`)**: 64 MiB ext4 (`/metadata`).
+- **p4 (`GBOS_DATA`)**: User-configured capacity (e.g. 64 GiB) ext4 (`/data`).
+
+> **Sparse capacity on host vs physical drive size:**
+> On the host file system, the image is created as a sparse file: a 64 GB userdata partition only occupies **~150 MB** of ext4 metadata on disk, so the whole `.img` file is only **~6.5 GB** physically.
+> However, when writing directly to a physical USB drive (`dd`), the drive must be large enough to hold all partitions. Choose `--data-size` to match your stick:
+> - **16 GB stick**: `--data-size 6`
+> - **32 GB stick**: `--data-size 20`
+> - **64 GB+ stick**: `--data-size 64` (default)
 
 ### Install to the internal disk (NVMe or eMMC)
-Set `MODE=install` in `gbos/gbos.cfg` and boot the stick. The target is the internal NVMe or **eMMC** disk (an eMMC is
+Boot a standard USB stick, or set `MODE=install` in `gbos/gbos.cfg`. The target is the internal NVMe or **eMMC** disk (an eMMC is
 recognised by its MMC device type: SD cards, card readers and the stick are never targets; the eMMC's boot/RPMB areas are left
 alone). With more than one internal disk the installer refuses until `INSTALL_DISK=nvme0n1` (or `mmcblk0`) is set in `gbos.cfg`.
-Minimum disk size 24 GB. eMMC controllers on the PCI bus work (`sdhci-pci`); ACPI-only ones (some AMD and older Atom parts) are not supported.
+Minimum disk size 24 GB.
 - **No gbos on the disk:** it shows the disk's model/serial/size and **erases the whole disk** only after
-  you type the serial number (eMMC: the MMC serial, or its CID when that is empty or zero). Layout: `GBOS_EFI` 512M (ESP), `GBOSSYS` 8G FAT32 (the `gbos/` files),
+  you type the serial number (eMMC: the MMC serial, or its CID when that is empty or zero). Layout: `GBOS_EFI` 512M (ESP), `GBOSSYS` 8G FAT32,
   `GBOS_META` 64M ext4, `GBOS_DATA` rest ext4. Every copied file is sha256-verified.
 - **gbos already installed:** it asks **1) Update** (keeps data, copies new files and kernel, and saves the
   install's last 3 boots of logs to the stick), **2) Reinstall** (erase; still asks for the serial) or
-  **3) Only save its logs** (read-only on the NVMe, takes seconds; `LOG_BOOTS=N` in `gbos.cfg` = how many boots).
-
-The installed system boots normally without the stick. With the stick plugged in and `MODE=install`,
-booting the stick always goes to that menu.
+  **3) Only save its logs** (read-only on the NVMe, takes seconds).
 
 ### Debugging workflow
-The installed system writes logs to its own `GBOSSYS` partition. To read them, boot the stick, choose
+The system writes logs to its own `GBOSSYS` (or `GBOS`) partition. To read them, boot the stick, choose
 menu **2**, then **3 (Only save its logs)** (or 1 to update too), and read `gbos/logs/boot-N/nvme-logs/` on the stick from a computer. Each boot dir has
-`kmsg.log`, `stage0-dmesg.txt` (look for `hook:` lines), rotated `logcat.txt*` (oldest = highest
-number), `crash.txt`, `hw.txt`, `audio.txt`, and `pstore-prev/` (the previous boot's kernel panic, if
-any). FAT has no journal: shut down from Android's power menu, not the power button.
+`kmsg.log`, `stage0-dmesg.txt`, rotated `logcat.txt*`, `crash.txt`, `hw.txt`, `audio.txt`, and `pstore-prev/`.
+FAT has no journal: always shut down from Android's power menu, not the physical power button.
 
 ### Display size
 Density stays Google's stock 260. `RESOLUTION=2400x1350` in `gbos.cfg` makes Android render at a larger

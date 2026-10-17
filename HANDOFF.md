@@ -229,3 +229,12 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   prints `ISA_EMU_INSTALLER_EMMC_PASS` (22 checks: wrong-serial cancel writes nothing, install, GPT/FAT/ext4 verified on the host, update, boot from the eMMC alone, NVMe still works, SD card refused).
   Test traps: QEMU's emulated eMMC *erases by really writing 0xFF*, so mke2fs's discard of the 25 GB data partition filled a Mac's disk (the test now passes `-E nodiscard` when `gbos_install_confirm=` is set,
   and aborts if the image passes 6 GB); QEMU stores the eMMC boot partitions first in the image, so the user area (GPT) is not at offset 0. Never run on a real eMMC laptop.
+- 2026-10-17 **Persistent USB / looper image target (build.sh & tools/make_gbos86_image.sh) CONFIRMED on hardware.** Added
+  a second build target variant: `looper` (persistent GPT image), alongside the existing `standard` live/installer image.
+  The looper layout mirrors the internal disk installation: p1 `GBOS_EFI` (512 MiB FAT32), p2 `GBOSSYS` (8 GiB FAT32, `MODE=boot`),
+  p3 `GBOS_META` (64 MiB ext4), and p4 `GBOS_DATA` (user-selected sparse ext4, default 64 GB). Sparse allocation via `truncate`,
+  `mke2fs -E nodiscard -m 0`, and `dd conv=notrunc,sparse` ensures the resulting image on the host disk physically takes only
+  ~6.5 GB (system payload + ext4 metadata) and expands dynamically up to the defined size. `build.sh` now interactively asks
+  which variant to build (1: Standard live/installer, 2: Looper persistent) and prompts for the userdata capacity in GB, or
+  accepts flags (`--standard`, `--looper`, `--data-size <GB>`). Hardware test confirmed by user: flashed to a USB drive,
+  boots directly to desktop with `MODE=boot`, `GBOS_META` and `GBOS_DATA` mount cleanly, and apps/data persist across reboots.
