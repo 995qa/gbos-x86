@@ -232,7 +232,7 @@ print('== 5. regression: an NVMe disk is still a target')
 nv = work / 'nvme.raw'
 with open(nv, 'wb') as f: f.truncate(32 * (1 << 30))
 make_stick(stick, cfg_install)
-txt, ok = qemu(stick, None, 'gbos_install_confirm=wrong-serial', r'Cancelled\. Nothing was written|no internal NVMe or eMMC', 300, 'nvme',
+txt, ok = qemu(stick, None, 'gbos_install_confirm=wrong-serial', r'Cancelled\. Nothing was written|no internal NVMe, eMMC or SATA', 300, 'nvme',
                disk=['-drive', f'if=none,id=nv,file={nv},format=raw', '-device', 'nvme,drive=nv,serial=NVME-TEST-123'])
 check('Target disk: /dev/nvme0n1 (NVMe)' in txt and 'serial: NVME-TEST-123' in txt, 'NVMe disk found, shown as NVMe with its serial')
 check(ok and 'Cancelled. Nothing was written' in txt, 'NVMe: cancelled with a wrong serial')
@@ -241,9 +241,9 @@ nv.unlink()
 print('== 6. regression: an SD card (not eMMC) is never a target')
 sd = work / 'sd.raw'
 with open(sd, 'wb') as f: f.truncate(32 * (1 << 30))
-txt, ok = qemu(stick, None, 'gbos_install_confirm=whatever', r'no internal NVMe or eMMC disk found|Target disk:', 300, 'sdcard',
+txt, ok = qemu(stick, None, 'gbos_install_confirm=whatever', r'no internal NVMe, eMMC or SATA disk found|Target disk:', 300, 'sdcard',
                disk=['-drive', f'if=none,id=sd0,file={sd},format=raw', '-device', 'sdhci-pci', '-device', 'sd-card,drive=sd0'])
-check('no internal NVMe or eMMC disk found' in txt and 'Target disk:' not in txt, 'SD card refused as an install target')
+check('no internal NVMe, eMMC or SATA disk found' in txt and 'Target disk:' not in txt, 'SD card refused as an install target')
 sd.unlink()
 
 print('RESULT:', 'ISA_EMU_INSTALLER_EMMC_PASS' if not FAIL else 'FAILED: ' + '; '.join(FAIL))
