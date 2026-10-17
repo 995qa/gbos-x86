@@ -126,7 +126,7 @@ Reports from people who booted the stick (2026-10-17). A row says what was repor
 | Dell Latitude 5300 | Core i5-8365U, 16 GB | **Works** | Everything tested: Wi-Fi, Bluetooth, sound, touchpad, brightness, battery, install | Suspend. The maintainer's machine |
 | Acer Aspire Lite AL15-52 | Core i5-1235U, 8 GB | **Works** | Wi-Fi, display, touchpad, keyboard, sound, brightness, camera, Bluetooth | Needed two firmware fixes (Realtek Wi-Fi; Intel AX201 Bluetooth name `ibt-0040-1050.sfi`), both in firmware v34+. Older sticks need a rebuild or an Update from a fresh stick |
 | Lenovo ThinkPad T470 | Intel 7th gen | **Works** | Reported as working with no setup | Short report |
-| Intel NUC8BEH (mini PC) | Core i3-8109U, 8 GB | **Works** (live) | Wi-Fi, Bluetooth, display and brightness (external monitor), keyboard (external), USB ports | Sound not tested. SATA M.2 SSD: the installer only targets NVMe/eMMC, so live only |
+| Intel NUC8BEH (mini PC) | Core i3-8109U, 8 GB | **Works** (live) | Wi-Fi, Bluetooth, display and brightness (external monitor), keyboard (external), USB ports | Sound not tested. SATA M.2 SSD: install support for SATA disks added afterwards (QEMU-tested only, not yet tried on this NUC) |
 | HP OmniBook 7 | Core Ultra 5 225U, 16 GB | Partly | Touchpad, keyboard, brightness, display | Wi-Fi (Intel BE201). Sound, webcam, Bluetooth not tested |
 | Dell XPS 16 (2026) | Intel Core Ultra | Partly | Boots and runs | Screen refresh rate, Wi-Fi, camera. A kernel option reportedly fixes the screen: try it with `MODOPTS` in `gbos.cfg` |
 | Framework Laptop 13 Pro | Core Ultra 5 325 (Panther Lake), 16 GB | Fix pending | Boots | Black screen on sticks without the Panther Lake `xe` firmware (GuC); firmware v35 has it. Awaiting confirmation |
@@ -171,7 +171,7 @@ suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not c
 | `usb/stage0_init.sh` | stage0: volume detection, logging, partition mounts, switch_root |
 | `usb/hook.sh` | Android workarounds, run by stage0 before switch_root; writes `gbos.rc` (init services) |
 | `usb/early_patch.sh` | Sourced from `gbos.cfg`; binds the patched libz/libcrypto before stage0's first `dmctl` |
-| `usb/install.sh` | NVMe/eMMC installer and updater (`MODE=install`) |
+| `usb/install.sh` | NVMe/eMMC/SATA installer and updater (`MODE=install`) |
 | `usb/apex_patch.sh` | binds the patched libcrypto over the APEX copies (run from init.rc) |
 | `usb/gbos.cfg` | user settings: `MODE` (ask/live/install/boot), `DENSITY`, `RESOLUTION`, `LOAD_I915`, ... |
 | `tools/make_gbos86_image.sh` | builds the flashable gbOS86 USB image into `dist/` |
@@ -186,7 +186,7 @@ suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not c
 | `kernel/configure_whl.py` | kernel config for this laptop (from Google's recovery kernel config) |
 | `kernel/isa_emu_patch/` | instruction emulator + `apply.sh`/`build.sh`, `debug_cmdline.txt` |
 | `kernel/ashmem_shim/` | C memfd ashmem shim |
-| `kernel/isa_emu_test/` | QEMU tests: the emulator (16 instructions), hwdetect, and `run_installer_emmc.py` (installer on an emulated eMMC) |
+| `kernel/isa_emu_test/` | QEMU tests: the emulator (16 instructions), hwdetect, `run_installer_emmc.py` (installer on an emulated eMMC) and `run_installer_sata.py` (on emulated SATA disks) |
 | `isa-emu/` | emulator core + host known-answer tests |
 | `tools/` | image extraction (`lp_extract.py`), ISA scanner (`isa_scan.py`), binary patchers |
 | `lapis/` | download script, ISA scan results, QEMU userspace harness |
@@ -209,13 +209,16 @@ The stick has two partitions: **`EFI`** (FAT, `EFI/BOOT/BOOTX64.EFI`) and **`GBO
 `bootdisk.img`, `crossystem`, `libkm_compat.so`, `system_ext_manifest.xml`, `soft_gk`, and the
 `firmware/`, `patched/`, `audio/`, `installer/`, `kmod/` folders. Logs go to `gbos/logs/boot-N/`.
 
-### Install to the internal disk (NVMe or eMMC)
+### Install to the internal disk (NVMe, eMMC or SATA)
 Set `MODE=install` in `gbos/gbos.cfg` and boot the stick. The target is the internal NVMe or **eMMC** disk (an eMMC is
 recognised by its MMC device type: SD cards, card readers and the stick are never targets; the eMMC's boot/RPMB areas are left
 alone). With more than one internal disk the installer refuses until `INSTALL_DISK=nvme0n1` (or `mmcblk0`) is set in `gbos.cfg`.
+A **SATA disk** (M.2 SATA or 2.5") is a target when the machine has no NVMe/eMMC: it is recognised by being owned by the SATA driver (libata), so a USB stick, a USB-SATA
+adapter or a card reader is never a target. A laptop with an NVMe *and* a SATA disk keeps installing to the NVMe; to use the SATA disk set `INSTALL_DISK=sda` in `gbos.cfg`.
+The BIOS must show the disk in **AHCI** mode (not Intel RST/RAID or VMD), otherwise Linux cannot see it. The serial to type is the drive's own serial.
 Minimum disk size 24 GB. eMMC controllers on the PCI bus work (`sdhci-pci`); ACPI-only ones (some AMD and older Atom parts) are not supported.
 - **No gbos on the disk:** it shows the disk's model/serial/size and **erases the whole disk** only after
-  you type the serial number (eMMC: the MMC serial, or its CID when that is empty or zero). Layout: `GBOS_EFI` 512M (ESP), `GBOSSYS` 8G FAT32 (the `gbos/` files),
+  you type the serial number (eMMC: the MMC serial, or its CID when that is empty or zero; SATA: the drive's serial). Layout: `GBOS_EFI` 512M (ESP), `GBOSSYS` 8G FAT32 (the `gbos/` files),
   `GBOS_META` 64M ext4, `GBOS_DATA` rest ext4. Every copied file is sha256-verified.
 - **gbos already installed:** it asks **1) Update** (keeps data, copies new files and kernel, and saves the
   install's last 3 boots of logs to the stick), **2) Reinstall** (erase; still asks for the serial) or
@@ -283,7 +286,7 @@ newer lapis build:
    data wipe.
 
 ## Safety
-- `install.sh` erases the **entire** internal disk (NVMe or eMMC) on a fresh install. The serial-number prompt is the only guard.
+- `install.sh` erases the **entire** internal disk (NVMe, eMMC or SATA) on a fresh install. The serial-number prompt is the only guard.
 - SELinux runs **permissive**, and the security services are software stand-ins. Don't treat this as a
   secure device.
 - The ISA emulator runs in the kernel's `#UD` handler; a bug there is a kernel bug.

@@ -1,4 +1,4 @@
-# gbOS86 installer/updater for the laptop's internal disk: NVMe or eMMC. Sourced by stage0 for menu choice 2 (or gbos.cfg
+# gbOS86 installer/updater for the laptop's internal disk: NVMe, eMMC or SATA (M.2 SATA / 2.5"). Sourced by stage0 for menu choice 2 (or gbos.cfg
 # MODE=install), after the stick is mounted at /gbos ($G=/gbos/gbos, log dir $L, stick partition $DEV) and drivers loaded.
 #
 # ERASES THE WHOLE TARGET DISK and lays it out as:
@@ -6,7 +6,7 @@
 #   p2 GBOSSYS      8 GiB FAT32: gbos/ as on the stick (super.img, hook.sh, firmware, ...)
 #   p3 GBOS_META   64 MiB ext4: Android /metadata
 #   p4 GBOS_DATA   rest   ext4: Android /data
-# Nothing is written until the disk's serial number is typed (eMMC: the MMC serial, or its CID if that is empty or zero). Every copied file is checked with
+# Nothing is written until the disk's serial number is typed (eMMC: the MMC serial, or its CID if that is empty or zero; SATA: the drive's serial). Every copied file is checked with
 # sha256 after being read back from the disk. Never returns: powers off or waits on failure.
 
 I=$G/installer
@@ -265,28 +265,44 @@ if [ "${ACTION:-install}" = update ]; then
   poweroff -f
 fi
 
-# Target: an internal disk, never the stick: an NVMe namespace or eMMC. eMMC needs its host controller driver (sdhci-pci). The kernel's
-# initramfs has it from kernel #33 on; older kernels only have it in the stick's module tree, so bind that tree and load it from there.
+# Target: an internal disk, never the stick: an NVMe namespace, eMMC or a SATA disk. eMMC needs its host controller driver (sdhci-pci). The
+# kernel's initramfs has it from kernel #33 on; older kernels only have it in the stick's module tree, so bind that tree and load it from there.
+# The SATA/AHCI driver and the SCSI disk driver are built into the kernel.
 if ! ls /sys/block | grep -q '^mmcblk'; then
   KVER=$(uname -r)
   [ -f $G/modules/lib/modules/$KVER/modules.dep ] && ! mountpoint -q /lib/modules 2>/dev/null && mount --bind $G/modules/lib/modules /lib/modules 2>/dev/null
   modprobe -q sdhci-pci 2>/dev/null && log "install: sdhci-pci loaded"
 fi
+# A disk is SATA when libata owns it: its sysfs path runs through an ataN port. A USB stick, a USB-SATA bridge, a card reader or a
+# virtual disk is also an sdX, but its path goes through usb / virtio / ..., so it is never a target.
+is_sata() { case "$(readlink -f /sys/block/$1 2>/dev/null)" in */ata[0-9]*/host*) return 0;; esac; return 1; }
 # Candidates: nvmeXnY, and mmcblkN whose device type is MMC (eMMC). SD cards and card readers are never targets; the eMMC's own
 # mmcblkNbootX / mmcblkNrpmb nodes are not matched. The stick's disk is never a candidate.
-internal_disks() {
+fast_disks() {
   for n in $(ls /sys/block | grep -E '^(nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$'); do
     [ "$n" = "$STICKDISK" ] && continue
     case $n in mmcblk*) [ "$(cat /sys/block/$n/device/type 2>/dev/null)" = MMC ] || continue;; esac
     echo $n
   done
 }
-# eMMC takes a moment to enumerate after the driver loads.
+sata_disks() {
+  for n in $(ls /sys/block | grep -E '^sd[a-z]+$'); do
+    [ "$n" = "$STICKDISK" ] && continue
+    is_sata $n && echo $n
+  done
+}
+# SATA disks are only offered when there is no NVMe/eMMC: a laptop with an NVMe and a SATA data disk keeps installing to the NVMe as
+# before. INSTALL_DISK=sda in gbos.cfg picks a SATA disk explicitly (also when there are several, or an NVMe is present).
+internal_disks() {
+  _f=$(fast_disks)
+  if [ -n "$_f" ]; then echo "$_f"; else sata_disks; fi
+}
+# eMMC and SATA take a moment to enumerate (driver load, link-up, IDENTIFY).
 for i in 1 2 3 4 5 6 7 8 9 10; do mdev -s; [ -n "$(internal_disks)" ] && break; sleep 1; done
 set -- $(internal_disks)
-[ $# -ge 1 ] || die "no internal NVMe or eMMC disk found (block devices: $(ls /sys/block | tr '\n' ' '))"
+[ $# -ge 1 ] || [ -n "$INSTALL_DISK" ] || die "no internal NVMe, eMMC or SATA disk found (block devices: $(ls /sys/block | tr '\n' ' '))"
 if [ -n "$INSTALL_DISK" ]; then   # gbos.cfg INSTALL_DISK=mmcblk0 chooses when there is more than one
-  case " $* " in *" $INSTALL_DISK "*) set -- $INSTALL_DISK;; *) die "INSTALL_DISK=$INSTALL_DISK is not one of the internal disks ($*)";; esac
+  case " $(fast_disks) $(sata_disks) " in *" $INSTALL_DISK "*) set -- $INSTALL_DISK;; *) die "INSTALL_DISK=$INSTALL_DISK is not one of the internal disks ($(fast_disks) $(sata_disks))";; esac
 fi
 [ $# -eq 1 ] || die "more than one internal disk ($*); set INSTALL_DISK=<name> in gbos.cfg on the stick to pick one"
 T=$1; TD=/dev/$T
@@ -298,6 +314,20 @@ case $T in
     MODEL="$(cat $CTRL/name 2>/dev/null | sed 's/ *$//') (eMMC, manufacturer id $(cat $CTRL/manfid 2>/dev/null))"
     SERIAL=$(cat $CTRL/serial 2>/dev/null | sed 's/^ *//; s/ *$//')
     case "$SERIAL" in ''|0|0x0|0x00000000) SERIAL=$(cat $CTRL/cid 2>/dev/null | sed 's/ //g');; esac;;
+  sd*)
+    KIND=SATA
+    MODEL="$(cat $CTRL/vendor 2>/dev/null | sed 's/ *$//') $(cat $CTRL/model 2>/dev/null | sed 's/ *$//')"
+    # The drive's serial: the SCSI "unit serial number" page when the kernel exposes it, else from the WWID, which libata builds as
+    # "t10.ATA" + vendor + the full 40-character model + the serial (the sysfs model above is cut to 16 characters).
+    SERIAL=$(tail -c +5 $CTRL/vpd_pg80 2>/dev/null | tr -d '\000' | tr -c '[:print:]' ' ' | sed 's/^ *//; s/ *$//')
+    WWID=$(cat $CTRL/wwid 2>/dev/null | sed 's/^ *//; s/ *$//')
+    case "$WWID" in
+      t10.ATA*)
+        _r=$(printf '%s' "${WWID#t10.ATA}" | sed 's/^ *//; s/ *$//')
+        [ -n "$SERIAL" ] || SERIAL=$(printf '%s' "$_r" | awk '{print $NF}')
+        MODEL="ATA $(printf '%s' "$_r" | sed 's/ *[^ ]*$//')";;
+      *) [ -n "$SERIAL" ] || SERIAL=$WWID;;
+    esac;;
   *)
     KIND=NVMe
     MODEL=$(cat $CTRL/model 2>/dev/null | sed 's/ *$//'); SERIAL=$(cat $CTRL/serial 2>/dev/null | sed 's/^ *//; s/ *$//');;
@@ -311,7 +341,7 @@ say "Target disk: $TD ($KIND)"
 say "  model:  $MODEL"
 say "  serial: $SERIAL"
 say "  size:   ${GB} GB"
-say "  current partitions: $(ls /sys/block/$T | grep "^${T}p" | tr '\n' ' ')"
+say "  current partitions: $(ls /sys/block/$T | grep "^${T}p\?[0-9]" | tr '\n' ' ')"
 say ""
 say "EVERYTHING ON THIS DISK WILL BE ERASED (Windows, files, all partitions)."
 say "To continue, type the serial number exactly as shown. Anything else cancels."
@@ -333,7 +363,7 @@ fi
 
 say ""
 say "Erasing and partitioning $TD ..."
-for p in $(ls /sys/block/$T | grep "^${T}p"); do umount /dev/$p 2>/dev/null; done
+for p in $(ls /sys/block/$T | grep "^${T}p\?[0-9]"); do umount /dev/$p 2>/dev/null; done
 # Clear old signatures at both ends (the backup GPT lives at the end).
 dd if=/dev/zero of=$TD bs=1M count=16 conv=fsync 2>/dev/null
 dd if=/dev/zero of=$TD bs=1M count=16 seek=$(( SIZE / 1048576 - 16 )) conv=fsync 2>/dev/null
@@ -345,7 +375,7 @@ size=64MiB, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="GBOS_META"
 type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="GBOS_DATA"
 EOF
 blockdev --rereadpt $TD 2>/dev/null; sleep 2; mdev -s
-case $T in *[0-9]) P=${TD}p;; *) P=$TD;; esac   # nvme0n1p1, mmcblk0p1
+case $T in *[0-9]) P=${TD}p;; *) P=$TD;; esac   # nvme0n1p1, mmcblk0p1, sda1
 for i in 1 2 3 4; do [ -b $P$i ] || { sleep 2; mdev -s; }; [ -b $P$i ] || die "partition $P$i did not appear"; done
 tool sfdisk -l $TD >> $L/install.log 2>&1
 
