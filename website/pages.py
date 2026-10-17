@@ -1,5 +1,6 @@
 """HTML for gbos86.com. Everything user-supplied goes through html.escape (e())."""
 import html, os, re, time, urllib.parse
+import laptops
 
 e = html.escape
 
@@ -102,7 +103,7 @@ WELCOME_POST = '''Welcome to the gbOS86 community.
 
 gbOS86 runs Google's Googlebook OS on ordinary Intel laptops. It boots from a USB stick (live), installs to the internal SSD, or updates an existing install without touching your data.
 
-**What works today:** Intel 6th gen and newer, Intel graphics, boot-time hardware detection for Wi-Fi, Bluetooth, sound, touchpad, brightness and display. The Dell Latitude 5300 is the only machine tested so far, so your reports matter.
+**What works today:** Intel 6th gen and newer, Intel graphics, boot-time hardware detection for Wi-Fi, Bluetooth, sound, touchpad, brightness and display. Seven laptops have been tried so far (Dell Latitude 5300, Acer Aspire Lite AL15-52 and ThinkPad T470 work; others partly or not yet): https://gbos86.com/hardware. Your reports matter.
 
 **How to help**
 - Read the install guide: https://gbos86.com/docs/install
@@ -129,7 +130,7 @@ def home(req, cats, latest, news, st):
 
 <section class="demo card"><div class="demo-text"><p class="eyebrow">Running on a Dell Latitude 5300</p><h2>See it running</h2>
 <p>Googlebook OS running on a Dell Latitude 5300 business laptop (Intel i5-8365U): the desktop and taskbar, the Bluetooth and Wi-Fi quick settings, the touchpad and keyboard.</p>
-<p class="mut">43 seconds, no sound, filmed on the laptop itself. Only this one laptop is tested so far; <a href="/hardware">help us find out about yours</a>.</p></div>
+<p class="mut">43 seconds, no sound, filmed on the laptop itself. Seven laptops have been tried so far, see the <a href="/hardware#tested">list</a>; <a href="/hardware">help us find out about yours</a>.</p></div>
 <video controls preload="metadata" playsinline poster="/static/demo-poster.jpg" width="320" height="568"><source src="/static/demo.mp4" type="video/mp4">Your browser can't play this video. <a href="/static/demo.mp4">Download it</a>.</video></section>
 
 <section class="grid3">
@@ -144,7 +145,7 @@ def home(req, cats, latest, news, st):
 
 <section class="card"><h2>Forums</h2><ul class="catlist">%s</ul></section>
 
-<section class="notice"><strong>Tested so far:</strong> Dell Latitude 5300 (i5-8365U). Everything else is built and wired but unproven on real hardware. Post your laptop in
+<section class="notice"><strong>Tried so far:</strong> Dell Latitude 5300, Acer Aspire Lite AL15-52 and Lenovo ThinkPad T470 work; HP OmniBook 7 and Dell XPS 16 partly; Framework 13 Pro has a fix pending; HP 14-ne0013dx does not. See the <a href="/hardware#tested">full list</a>. Post your laptop in
 <a href="/forum/c/hardware">Hardware Compatibility</a> and attach <code>hwdetect.txt</code>.</section>''' % (lat, nw, st['members'], st['threads'], st['posts'], cat_rows)
 
 
@@ -316,10 +317,13 @@ sudo dd if=gbOS86.img of=/dev/sdX bs=4M status=progress   # Linux</code></pre>
 def hardware(req):
     return '''<div class="doc"><h1>Hardware</h1>
 <p class="lead">gbOS86 targets <strong>Intel 6th-gen (Skylake) and newer</strong> laptops with Intel graphics. At every boot it reads your devices and loads matching drivers.</p>
-<div class="notice"><strong>Be realistic:</strong> only the <b>Dell Latitude 5300</b> (i5-8365U, UHD 620) has been booted. Everything else is built in but unproven. Reports from your laptop make this table real: <a href="/forum/c/hardware">post yours</a>.</div>
+<div class="notice"><strong>Be realistic:</strong> seven laptops have been tried, three of them fully working. Newer chips (Core Ultra, Wi-Fi 7) are the weak spot. Reports from your laptop make this table real: <a href="/forum/c/hardware">post yours</a>.</div>
+<h2 id="tested">Laptops people have tried</h2>
+''' + laptops.table_html() + '''
+<h2>What the drivers cover</h2>
 <table class="spec"><thead><tr><th>Area</th><th>Supported</th></tr></thead><tbody>
 <tr><td>CPU</td><td>Intel Core, 6th gen and newer. Missing instructions (SHA-NI, AVX-VNNI, GFNI, VAES, VPCLMULQDQ, AVX-IFMA) are emulated in the kernel; the hottest code is pre-patched. Faster on newer CPUs that have them natively.</td></tr>
-<tr><td>Graphics, display</td><td>Intel i915 from Skylake to Raptor Lake, eDP panels, HDMI/DP. Newer chips use xe (untested). Colour fixes apply to i915 only.</td></tr>
+<tr><td>Graphics, display</td><td>Intel i915 from Skylake to Raptor Lake, eDP panels, HDMI/DP. Newer chips use xe, which needs its own firmware (a Framework 13 Pro stayed black without it); see the list above. Colour fixes apply to i915 only.</td></tr>
 <tr><td>Brightness</td><td>Backlight class and ACPI video, plus laptop hotkey drivers (Dell, HP, ThinkPad, IdeaPad, Asus, Acer, Samsung, MSI, Sony, Fujitsu, LG, Intel HID).</td></tr>
 <tr><td>Wi-Fi</td><td>Intel 7260/7265, 8265, 9000-series, AX200/201/210/211, BE200 (iwldvm and iwlmvm). Realtek rtw88 and rtw89. MediaTek mt7921/22/25. Qualcomm ath10k and ath11k. Broadcom brcmfmac.</td></tr>
 <tr><td>Bluetooth</td><td>USB Bluetooth from Intel, Realtek, MediaTek, Qualcomm and Broadcom, plus Intel PCIe Bluetooth.</td></tr>
@@ -352,10 +356,10 @@ def download(req):
 
 def faq(req):
     qa = [('Is this official?', 'No. gbOS86 is an independent community project and is not affiliated with or endorsed by Google.'),
-          ('Will it work on my laptop?', 'If it has an Intel 6th-gen or newer CPU and Intel graphics, probably yes; see <a href="/hardware">Hardware</a>. Only the Dell Latitude 5300 is verified. Try live mode first.'),
+          ('Will it work on my laptop?', 'If it has an Intel 6th-gen or newer CPU and Intel graphics, probably yes; see <a href="/hardware">Hardware</a>. Seven laptops have been tried (three work fully; newer Core Ultra machines are the weak spot), see the <a href="/hardware#tested">list</a>. Try live mode first.'),
           ('Can I break my laptop?', 'Live mode writes nothing to the internal drive. Installing erases the internal drive, and only after you type its serial number on the laptop. Back up first.'),
           ('Why is the first boot slow?', 'Google\'s OS uses CPU instructions older chips lack. The kernel emulates them, which costs time. gbOS86 patches the worst offenders and loads those patches before they can slow boot.'),
-          ('Does Wi-Fi / Bluetooth / sound work?', 'On the Dell Latitude 5300, yes. On other laptops the right drivers are detected at boot, but this is untested. Send us your <code>hwdetect.txt</code>.'),
+          ('Does Wi-Fi / Bluetooth / sound work?', 'On the Dell Latitude 5300 and the Acer Aspire Lite AL15-52, yes (the Acer needed firmware fixes that are now in the build). On Core Ultra machines Wi-Fi is the open problem. See the <a href="/hardware#tested">tested list</a> and send us your <code>hwdetect.txt</code>.'),
           ('Does suspend work?', 'Not yet.'),
           ('Why can I not download the image?', 'It contains Google\'s OS and patched Google libraries. See <a href="/download">Get gbOS86</a>.'),
           ('Does it work on AMD or ARM?', 'No. Intel x86 only.'),
@@ -374,7 +378,7 @@ def about(req):
 <li><strong>Software stand-ins</strong> for Google-only hardware (security chip, Trusty VM): a software Gatekeeper, hidden or replaced services.</li>
 <li><strong>Hardware detection.</strong> At boot it reads every device ID, loads the matching driver and firmware, and writes a report.</li></ul>
 <h2>Status</h2>
-<p>Boots to the desktop, sign-in, Play Store, persistent data on the internal drive, and updates from a USB stick. Tested on a Dell Latitude 5300. Broad Intel support is new and needs your reports.</p>
+<p>Boots to the desktop, sign-in, Play Store, persistent data on the internal drive, and updates from a USB stick. Fully working on a Dell Latitude 5300, an Acer Aspire Lite AL15-52 and a ThinkPad T470; partly on newer machines (see the <a href="/hardware#tested">tested list</a>). Broad Intel support is new and needs your reports.</p>
 <h2>Contact</h2><p>Source code: <a href="https://github.com/linuxkid473/gbos-x86" rel="noopener" target="_blank">github.com/linuxkid473/gbos-x86</a>. Questions: the <a href="/forum">forum</a>, <a href="https://discord.gg/h9AD9fSnDT" rel="noopener" target="_blank">Discord</a> or the <a href="/contact">contact form</a>.</p></div>'''
 
 

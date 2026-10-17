@@ -6,6 +6,7 @@ Community site and forum for gbOS86. Python 3 standard library only (no pip, no 
 |---|---|
 | `app.py` | HTTP server, routes, auth (scrypt, sessions, CSRF), rate limits, forum, contact messages, admin |
 | `pages.py` | All HTML (home, install guide, hardware, download, FAQ, about, forum views). User text is always escaped |
+| `laptops.py` | The list of laptops people have tried (Hardware page and docs read it; README.md has a copy by hand) |
 | `static/` | CSS, JS, logo (`logo.png` from the project logo), favicons, social card |
 | `deploy/` | `deploy.sh`, systemd units (service + daily DB backup timer) |
 

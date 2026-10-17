@@ -25,7 +25,8 @@ def overview():
 <h2>Status</h2>
 <table class="spec"><tbody>
 <tr><td>Works (Dell Latitude 5300)</td><td>Boot to desktop, setup and Google sign-in, Play Store installs, Wi-Fi, Bluetooth, sound (speakers, headset jack, internal mic, HDMI), touchpad with gestures, battery/AC, persistent data on the internal NVMe drive, screen-lock password, correct display colours.</td></tr>
-<tr><td>Built, untested elsewhere</td><td>Generic support for other Intel 6th-gen and newer laptops (see <a href="/docs/hardware-detection">Hardware detection</a>).</td></tr>
+<tr><td>Works on other laptops</td><td>Acer Aspire Lite AL15-52 (i5-1235U) and Lenovo ThinkPad T470, as reported by the people who tried them. See <a href="/docs/tested-laptops">Tested laptops</a>.</td></tr>
+<tr><td>Partly works</td><td>HP OmniBook 7 (no Wi-Fi) and Dell XPS 16 (screen refresh, Wi-Fi and camera). A Framework Laptop 13 Pro had a black screen, now fixed in the firmware and waiting for confirmation; an HP 14-ne0013dx did not work. Newer Core Ultra machines are the weak spot.</td></tr>
 <tr><td>Not done</td><td>Suspend/resume, Night Light, fingerprint readers, IPU6 cameras, discrete GPUs, OTA updates (manual updates only), Linux Terminal VM, auth-bound keystore keys.</td></tr></tbody></table>
 <h2>The pages in this section</h2>
 <ol><li><a href="/docs/install">Install</a>: the USB stick, booting, installing and updating.</li>
@@ -109,7 +110,7 @@ def hwdetect():
 <p>Every step is non-fatal: a laptop with an unsupported device simply ends up without that driver. Set <code>HWDETECT=0</code> to disable it. If a stick has no <code>gbos/modules</code>, the older Latitude 5300-specific Wi-Fi and Bluetooth sequence runs instead.</p>
 <h2>What is covered</h2>
 <table class="spec"><thead><tr><th>Area</th><th>Drivers</th></tr></thead><tbody>
-<tr><td>Graphics</td><td><code>i915</code> (Skylake to Raptor Lake, loaded by stage0), <code>xe</code> for newer parts (untested), ACPI video and the backlight class.</td></tr>
+<tr><td>Graphics</td><td><code>i915</code> (Skylake to Raptor Lake, loaded by stage0), <code>xe</code> for newer parts (needs its own firmware; see <a href="/docs/tested-laptops">Tested laptops</a>), ACPI video and the backlight class.</td></tr>
 <tr><td>Wi-Fi</td><td>Intel <code>iwldvm</code> (7260, 7265) and <code>iwlmvm</code> (8265 to BE200), Realtek <code>rtw88</code>/<code>rtw89</code>, MediaTek <code>mt7921</code>/<code>mt7922</code>/<code>mt7925</code>, Qualcomm <code>ath10k</code>/<code>ath11k</code>, Broadcom <code>brcmfmac</code>.</td></tr>
 <tr><td>Bluetooth</td><td><code>btusb</code> with Intel, Realtek, MediaTek, Qualcomm and Broadcom support, plus Intel PCIe Bluetooth.</td></tr>
 <tr><td>Audio</td><td>Legacy HDA with Realtek, Conexant, Cirrus, IDT/SigmaTel, VIA and other codecs, or SOF (Intel DSP, digital mics, SoundWire). The kernel's <code>snd_intel_dspcfg</code> picks one per machine.</td></tr>
@@ -122,6 +123,20 @@ def hwdetect():
 <p><code>hwdetect.txt</code> contains the kernel version, DMI vendor and model, <strong>PCI devices that have no driver</strong>, USB devices with their drivers, input devices, network interfaces, Bluetooth controllers, backlight devices with their range, sound cards, rfkill switches, <strong>missing-firmware</strong> kernel messages, and the list of loaded modules. It is the first thing asked for in any hardware report.</p>
 <h2>Firmware layout</h2>
 <p>The files are in <code>gbos/firmware/</code> using the names the kernel requests: Intel Wi-Fi <code>iwlwifi-*.ucode</code> at the top level, <code>intel/ibt-*</code> for Intel Bluetooth, <code>i915/</code> for graphics microcontrollers, <code>intel/sof*</code> for SOF audio, and folders for rtw88, rtw89, mediatek, ath10k, ath11k, brcm, qca, rtl_bt and cirrus.</p>'''
+
+
+@doc('tested-laptops', 'Tested laptops', 'Which laptops people have tried gbOS86 on, and what worked.')
+def tested_laptops():
+    import laptops
+    return '''<h1>Tested laptops</h1>
+<p class="lead">''' + laptops.summary() + '''. Every row is a report from someone who booted the stick, not a guarantee.</p>
+''' + laptops.table_html() + '''
+<h2>Patterns so far</h2>
+<ul><li><strong>Business and mainstream laptops from 2017 to 2022</strong> (Latitude 5300, ThinkPad T470, Aspire Lite AL15-52) work with little or no setup.</li>
+<li><strong>Newer Core Ultra machines</strong> boot but run into missing pieces: <code>xe</code> graphics needs its firmware (<em>Framework 13 Pro</em>), and Wi-Fi 7 cards (<em>OmniBook 7</em>, <em>XPS 16</em>) have no working driver and firmware pair yet.</li>
+<li><strong>Missing firmware</strong> is the usual cause of a device that does nothing. <code>hwdetect.txt</code> lists it under "missing firmware".</li></ul>
+<h2>Report yours</h2>
+<p>Boot the stick, then open <code>gbos/logs/boot-N/hwdetect.txt</code> on another computer. Post it with the laptop's model, CPU, RAM and what works in <a href="/forum/c/hardware">Hardware Compatibility</a>, or on <a href="https://discord.gg/h9AD9fSnDT" rel="noopener" target="_blank">Discord</a>. To try a driver option on your own, see <code>MODOPTS</code> in <a href="/docs/configuration">Configuration</a>.</p>'''
 
 
 @doc('google-hardware', 'Google-only hardware', 'The services and devices that do not exist on other laptops, and what replaces them.')
@@ -155,6 +170,8 @@ def configuration():
 <tr><td><code>LOAD_I915</code></td><td><code>1</code> (default), <code>0</code></td><td>Load the Intel graphics driver in stage0. Set <code>0</code> if the screen freezes right after "modprobe i915".</td></tr>
 <tr><td><code>LOAD_WIFI</code></td><td><code>0</code> (default), <code>1</code></td><td>Legacy: load the Intel Wi-Fi driver in stage0. Hardware detection supersedes it.</td></tr>
 <tr><td><code>SHELL_AT</code></td><td><code>none</code>, <code>early</code>, <code>pre_android</code></td><td>Drop to a shell before drivers (<code>early</code>) or just before Android starts (<code>pre_android</code>) for debugging.</td></tr>
+<tr><td><code>MODOPTS</code></td><td><code>"module.param=value ..."</code></td><td>Driver options in the same spelling as a Linux kernel command line, for modules only (e.g. <code>xe.enable_panel_replay=0</code>). They are applied when hardware detection loads the module. A module that stage0 already loaded keeps its parameters; the boot log says so. <code>logs/boot-N/hwdetect.txt</code> lists the <code>xe</code> and <code>i915</code> parameters.</td></tr>
+<tr><td><code>INSTALL_DISK</code></td><td>e.g. <code>nvme0n1</code>, <code>mmcblk0</code></td><td>Which internal disk the installer may erase when there is more than one (NVMe or eMMC). The serial number is still typed on the laptop first.</td></tr>
 <tr><td><code>EXTRA_SLEEP</code></td><td>seconds</td><td>Pause before handing over to Android, so you can read the screen.</td></tr></tbody></table>
 <p>An older setting, <code>BOOT_FROM=stick</code>, still works and means <code>live</code>.</p>
 <h2>What Update does with your config</h2>
@@ -234,7 +251,7 @@ def safety():
 <li>The CPU emulator runs inside the kernel; a bug there is a kernel bug.</li></ul>
 <h2>Compatibility limits</h2>
 <ul><li>Intel x86-64 only. No AMD CPUs, no ARM.</li><li>Installing needs an internal NVMe drive (live mode works without).</li><li>Suspend and resume, fingerprint readers, IPU6 cameras and discrete GPUs are not supported.</li>
-<li>Only the Dell Latitude 5300 is verified. Everything else is untested.</li></ul>
+<li>Seven laptops have been tried, three of them fully working; see <a href="/docs/tested-laptops">Tested laptops</a>. Anything not on that list is untested.</li></ul>
 <h2>Legal</h2>
 <p>gbOS86 is an independent community project, not affiliated with or endorsed by Google. Googlebook OS, Android and Chrome are Google's. The built image contains Google's OS and is not redistributed. The source repository includes a small number of patched Google libraries (a patched libz, libcrypto and a software KeyMint library) that the build requires; Google's own terms apply to them.</p>'''
 
