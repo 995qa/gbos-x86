@@ -45,13 +45,19 @@ LAPTOPS = [
 
 
 def table_html():
-    rows = []
+    """Cards, not a table: five text columns do not fit next to each other (name column hogged the width)."""
+    cards = []
     for l in LAPTOPS:
-        rows.append('<tr><td><strong>%s</strong><br><span class="mut">%s</span></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>' % (
-            escape(l['name']), escape(l['cpu']), STATUS[l['status']], escape(l['works']) or '&ndash;', escape(l['broken']) or '&ndash;', l['notes']))
-    return ('<div style="overflow-x:auto"><table class="spec"><thead><tr><th>Laptop</th><th>Result</th><th>Works</th><th>Does not work</th><th>Notes</th></tr></thead><tbody>%s</tbody></table></div>'
-            '<p class="mut">Based on reports from people who tried it, last updated %s. Results change as fixes land: a row says what was reported, not what the latest build can do. '
-            'Post yours in <a href="/forum/c/hardware">Hardware Compatibility</a> with your <code>hwdetect.txt</code>.</p>') % ('\n'.join(rows), UPDATED)
+        rows = ''
+        if l['works']:
+            rows += '<dt>Works</dt><dd>%s</dd>' % escape(l['works'])
+        if l['broken']:
+            rows += '<dt>Not working</dt><dd>%s</dd>' % escape(l['broken'])
+        cards.append('<article class="lap"><div class="top"><div><h3>%s</h3><p class="cpu">%s</p></div><span class="badge %s">%s</span></div>'
+                     '<dl>%s</dl><p class="note">%s</p></article>' % (escape(l['name']), escape(l['cpu']), l['status'], STATUS[l['status']], rows, l['notes']))
+    return ('<div class="laptops">%s</div>'
+            '<p class="mut">Based on reports from people who tried it, last updated %s. Results change as fixes land: a card says what was reported, not what the latest build can do. '
+            'Post yours in <a href="/forum/c/hardware">Hardware Compatibility</a> with your <code>hwdetect.txt</code>.</p>') % ('\n'.join(cards), UPDATED)
 
 
 def summary():

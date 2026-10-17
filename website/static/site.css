@@ -85,3 +85,15 @@ table.spec td:first-child{white-space:normal}th,td{padding:10px}table.forum .num
 .demo video{display:block;width:min(320px,100%);height:auto;border-radius:14px;background:#000;justify-self:center}
 .demo h2{margin-top:0}
 @media(max-width:820px){.demo{grid-template-columns:1fr}.demo video{justify-self:start}}
+/* tested laptops: one card each */
+.laptops{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:16px 0}
+.laptops .lap{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin:0;display:flex;flex-direction:column;gap:10px}
+.lap h3{margin:0;font-size:18px;line-height:1.25}.lap .cpu{margin:0;color:var(--mut);font-size:14px}
+.lap .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.lap dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:15px}.lap dt{color:var(--mut);font-weight:600;white-space:nowrap}.lap dd{margin:0}
+.lap .note{margin:0;font-size:14px;color:var(--mut);border-top:1px solid var(--line);padding-top:10px}
+.badge{flex:none;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.badge.works{color:#1a7f37;background:rgba(26,127,55,.12)}.badge.partial{color:#9a6700;background:rgba(154,103,0,.14)}
+.badge.pending{color:var(--blue);background:rgba(11,95,255,.12)}.badge.no{color:var(--err);background:rgba(192,38,45,.12)}
+@media (prefers-color-scheme:dark){.badge.works{color:#4ac26b}.badge.partial{color:#e3b341}.badge.pending{color:#6ea8ff}.badge.no{color:#ff7b72}}
+@media(max-width:820px){.laptops{grid-template-columns:1fr}}
