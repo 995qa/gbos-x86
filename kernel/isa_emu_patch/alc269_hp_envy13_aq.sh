@@ -6,10 +6,18 @@
 # Same pin situation as the HP Spectre x360 15-df0xxx (103c:8519, ALC285_FIXUP_HP_SPECTRE_X360): declare 0x14 as
 # an internal fixed speaker (0x90170110) and force 0x17 onto DAC 0x02 so both pairs share one stream / volume.
 # The new fixup chains to ALC269_FIXUP_HP_MUTE_LED so the vendor wildcard's mute-LED probing is not lost.
-# Keyed on the exact SSID, no other machine is affected. Built in (CONFIG_SND_HDA_CODEC_ALC269=y): kernel relink.
-# Idempotent.
+# Keyed on the CODEC subsystem id (HDA_CODEC_QUIRK), not the PCI one: snd_hda_pick_fixup() looks up SND_PCI_QUIRK entries
+# with the subsystem id of the controller's PCI device, and for a codec behind SOF (hdac_hda, sof_pci_probe sets hbus->pci)
+# that is the PCH audio device's SSID, which this laptop's hwdetect.txt never shows; only the codec's (103c:85e2) is
+# known. HDA_CODEC_QUIRK compares with codec->core.subsystem_id regardless of bus->pci. No other machine is affected.
+# Built in (CONFIG_SND_HDA_CODEC_ALC269=y): kernel relink. Idempotent; also upgrades the first version of this patch
+# (SND_PCI_QUIRK) in place.
 set -e
 cd /build/src/sound/hda/codecs/realtek
+if grep -q 'SND_PCI_QUIRK(0x103c, 0x85e2, "HP ENVY Laptop 13-aq0xxx"' alc269.c; then
+  sed -i 's/SND_PCI_QUIRK(0x103c, 0x85e2, "HP ENVY Laptop 13-aq0xxx"/HDA_CODEC_QUIRK(0x103c, 0x85e2, "HP ENVY Laptop 13-aq0xxx"/' alc269.c
+  grep -n 'ENVY13_AQ\|envy13-aq' alc269.c; echo upgraded; exit 0
+fi
 grep -q 'ALC285_FIXUP_HP_ENVY13_AQ' alc269.c && { echo already; exit 0; }
 python3 - alc269.c <<'PYEOF'
 import sys
@@ -42,10 +50,10 @@ sub("""	[ALC285_FIXUP_HP_SPECTRE_X360] = {
 	},
 """)
 
-# 3. quirk, sorted by SSID (after 0x85de)
+# 3. quirk, sorted by SSID (after 0x85de); codec-SSID match, see above
 sub("""	SND_PCI_QUIRK(0x103c, 0x85de, "HP Envy x360 13-ar0xxx", ALC285_FIXUP_HP_ENVY_X360),
 """, """	SND_PCI_QUIRK(0x103c, 0x85de, "HP Envy x360 13-ar0xxx", ALC285_FIXUP_HP_ENVY_X360),
-	SND_PCI_QUIRK(0x103c, 0x85e2, "HP ENVY Laptop 13-aq0xxx", ALC285_FIXUP_HP_ENVY13_AQ),
+	HDA_CODEC_QUIRK(0x103c, 0x85e2, "HP ENVY Laptop 13-aq0xxx", ALC285_FIXUP_HP_ENVY13_AQ),
 """)
 
 # 4. model name for the "model=" option
