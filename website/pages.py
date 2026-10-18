@@ -280,7 +280,7 @@ def guide(req):
 <div class="toc card"><strong>On this page</strong><a href="#need">What you need</a><a href="#flash">1. Flash the stick</a><a href="#boot">2. Boot it</a><a href="#live">3. Try it live</a><a href="#install">4. Install</a><a href="#update">5. Update later</a><a href="#trouble">If something is wrong</a></div>
 
 <h2 id="need">What you need</h2>
-<ul><li>A laptop with an <strong>Intel 6th-gen (Skylake) or newer CPU</strong> and Intel graphics. See <a href="/hardware">Hardware</a>.</li>
+<ul><li>A laptop with an <strong>Intel 6th-gen (Skylake) or newer CPU with AVX</strong> (many Celeron, Pentium and Atom chips have none and cannot run it) and Intel graphics. See <a href="/hardware">Hardware</a>.</li>
 <li>A <strong>USB stick of 8 GB or more</strong> (it will be erased).</li>
 <li>The gbOS86 image (<a href="/download">how to get it</a>) and a flashing tool: balenaEtcher, Rufus, or <code>dd</code>.</li>
 <li>For installing: a laptop with an <strong>internal NVMe SSD</strong> that you are happy to erase, and a backup of anything on it. Live mode touches nothing and works without NVMe.</li></ul>
@@ -318,7 +318,7 @@ def hardware(req):
 <p class="lead">gbOS86 targets <strong>Intel 6th-gen (Skylake) and newer</strong> laptops with Intel graphics. At every boot it reads your devices and loads matching drivers.</p>
 <div class="notice"><strong>Be realistic:</strong> only the <b>Dell Latitude 5300</b> (i5-8365U, UHD 620) has been booted. Everything else is built in but unproven. Reports from your laptop make this table real: <a href="/forum/c/hardware">post yours</a>.</div>
 <table class="spec"><thead><tr><th>Area</th><th>Supported</th></tr></thead><tbody>
-<tr><td>CPU</td><td>Intel Core, 6th gen and newer. Missing instructions (SHA-NI, AVX-VNNI, GFNI, VAES, VPCLMULQDQ, AVX-IFMA) are emulated in the kernel; the hottest code is pre-patched. Faster on newer CPUs that have them natively.</td></tr>
+<tr><td>CPU</td><td>Intel Core, 6th gen and newer, with AVX (check <code>grep avx /proc/cpuinfo</code> on any Linux; many Celeron/Pentium/Atom chips lack it and boot stops with a message). Missing instructions (SHA-NI, AVX-VNNI, GFNI, VAES, VPCLMULQDQ, AVX-IFMA) are emulated in the kernel; the hottest code is pre-patched. Faster on newer CPUs that have them natively.</td></tr>
 <tr><td>Graphics, display</td><td>Intel i915 from Skylake to Raptor Lake, eDP panels, HDMI/DP. Newer chips use xe (untested). Colour fixes apply to i915 only.</td></tr>
 <tr><td>Brightness</td><td>Backlight class and ACPI video, plus laptop hotkey drivers (Dell, HP, ThinkPad, IdeaPad, Asus, Acer, Samsung, MSI, Sony, Fujitsu, LG, Intel HID).</td></tr>
 <tr><td>Wi-Fi</td><td>Intel 7260/7265, 8265, 9000-series, AX200/201/210/211, BE200 (iwldvm and iwlmvm). Realtek rtw88 and rtw89. MediaTek mt7921/22/25. Qualcomm ath10k and ath11k. Broadcom brcmfmac.</td></tr>

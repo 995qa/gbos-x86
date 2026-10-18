@@ -145,7 +145,7 @@ The kernel (#31) builds drivers for most Intel-era laptops as **modules**, and b
 
 | Area | Covered |
 |---|---|
-| CPU | Anything the ISA-emulation kernel handles: 6th gen (Skylake) and newer; the Googlebook OS needs instructions older CPUs lack, so it is emulated (slow on pre-2021 CPUs) |
+| CPU | Anything the ISA-emulation kernel handles: 6th gen (Skylake) and newer **with AVX** (many Celeron/Pentium/Atom parts have none: init dies on its first instruction, and boot now stops with a message); the Googlebook OS needs instructions older CPUs lack, so it is emulated (slow on pre-2021 CPUs) |
 | Graphics / display / brightness | `i915` (Gen9 to Raptor Lake) + ACPI video/backlight; `xe` for newer parts (**untested**; the colour/gamma fixes are i915-only) |
 | Wi-Fi | Intel (`iwldvm`: 7260/7265, `iwlmvm`: 8265 to AX211/BE200), Realtek rtw88/rtw89, MediaTek mt7921/7922/7925, Qualcomm ath10k/ath11k, Broadcom brcmfmac |
 | Bluetooth | `btusb` with Intel/Realtek/MediaTek/Qualcomm/Broadcom, Intel PCIe BT |

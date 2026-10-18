@@ -233,7 +233,7 @@ def safety():
 <li>Secure Boot must be off, so the boot chain is not verified.</li>
 <li>The CPU emulator runs inside the kernel; a bug there is a kernel bug.</li></ul>
 <h2>Compatibility limits</h2>
-<ul><li>Intel x86-64 only. No AMD CPUs, no ARM.</li><li>Installing needs an internal NVMe drive (live mode works without).</li><li>Suspend and resume, fingerprint readers, IPU6 cameras and discrete GPUs are not supported.</li>
+<ul><li>Intel x86-64 only. No AMD CPUs, no ARM. The CPU must have AVX (many Celeron, Pentium and Atom parts do not): Google's init uses it from its first instruction.</li><li>Installing needs an internal NVMe drive (live mode works without).</li><li>Suspend and resume, fingerprint readers, IPU6 cameras and discrete GPUs are not supported.</li>
 <li>Only the Dell Latitude 5300 is verified. Everything else is untested.</li></ul>
 <h2>Legal</h2>
 <p>gbOS86 is an independent community project, not affiliated with or endorsed by Google. Googlebook OS, Android and Chrome are Google's. The built image contains Google's OS and is not redistributed. The source repository includes a small number of patched Google libraries (a patched libz, libcrypto and a software KeyMint library) that the build requires; Google's own terms apply to them.</p>'''
