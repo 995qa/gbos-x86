@@ -146,7 +146,7 @@ The kernel (#31) builds drivers for most Intel-era laptops as **modules**, and b
 | Area | Covered |
 |---|---|
 | CPU | Anything the ISA-emulation kernel handles: 6th gen (Skylake) and newer **with AVX** (many Celeron/Pentium/Atom parts have none: init dies on its first instruction, and boot now stops with a message); the Googlebook OS needs instructions older CPUs lack, so it is emulated (slow on pre-2021 CPUs) |
-| Graphics / display / brightness | `i915` (Gen9 to Raptor Lake) + ACPI video/backlight; `xe` for newer parts (**untested**; the colour/gamma fixes are i915-only) |
+| Graphics / display / brightness | `i915` (Gen9 to Raptor Lake) + ACPI video/backlight; `xe` for newer parts (**untested**; the colour/gamma fixes are i915-only). **AMD Radeon (`amdgpu`): experimental, software rendering only** (CPU-drawn, slow; see below; **untested on hardware**) |
 | Wi-Fi | Intel (`iwldvm`: 7260/7265, `iwlmvm`: 8265 to AX211/BE200), Realtek rtw88/rtw89, MediaTek mt7921/7922/7925, Qualcomm ath10k/ath11k, Broadcom brcmfmac |
 | Bluetooth | `btusb` with Intel/Realtek/MediaTek/Qualcomm/Broadcom, Intel PCIe BT |
 | Sound | Legacy HDA with every common codec, **or** SOF (Intel DSP, DMIC, SoundWire); the kernel picks per machine (`snd_intel_dspcfg`). The audio HAL config is generated for the card that appears (`hook.sh`) |
@@ -156,8 +156,29 @@ The kernel (#31) builds drivers for most Intel-era laptops as **modules**, and b
 
 **Honest limits.** Only the Latitude 5300 has been booted; everything else is built and wired but untested on
 hardware. Sound on SOF machines needs the codec's mixer controls to match the generated config (best effort);
-suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not covered. Build the payload with
+suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD discrete GPUs are not covered. Build the payload with
 `tools/fetch_firmware.sh` (firmware, not committed) and `kernel/isa_emu_patch/build_generic*.sh` (modules, not committed).
+
+### AMD graphics (experimental, software rendering)
+
+Google's image only has an Intel graphics driver (the Vulkan driver `vulkan.intel.so`, and a gralloc (minigbm) with no `amdgpu` backend), so on a Ryzen
+laptop nothing could draw. When boot finds no Intel GPU and a non-Intel DRM driver bound (the kernel and firmware for `amdgpu` are already
+shipped), `hook.sh` switches to **software rendering**, logged as `hook: software rendering: ...`:
+
+- `usb/patched/vulkan.swiftshader.so` (SwiftShader, a CPU Vulkan driver built for Android by `tools/swiftshader-android/build.sh`; fetched by
+  `build.sh` from the release, 24 MB) is bind-mounted over `/vendor/lib64/hw/vulkan.intel.so`, so ANGLE, Skia and SurfaceFlinger render on the CPU.
+- `usb/patched/libminigbm_gralloc.amdgpu.so` (`tools/patch_gralloc_amdgpu.py`) is bind-mounted over `/vendor/lib64/libminigbm_gralloc.so`
+  (Google's gralloc, minigbm built in): one of its identical generic linear dumb-buffer backends (the ARM-only "komeda" one) now answers to DRM
+  driver `amdgpu`, so gralloc can allocate scanout/render buffers; and Google's "software renderer" flag (lets a CPU Vulkan driver lock buffers that
+  were allocated for the GPU only) is switched on for `ro.hardware.vulkan=intel`. `libgbm.amdgpu.so` does the same for `/vendor/lib64/libgbm.so` (only the
+  camera and video-codec HALs use that one). Each is bound only over the exact original (sha256).
+- Background blur and overlay planes are turned off (`ro.surface_flinger.supports_background_blur=0`, `ro.vendor.hwc.use_overlay_planes=false`):
+  blur is far too slow on the CPU, and the composer's non-Intel backend is untested.
+
+`GPU_SOFTWARE` in `gbos.cfg`: `auto` (default; never changes anything while an Intel GPU is present), `1` (force, for testing on Intel), `0` (never).
+Expect a slow, but working, desktop; use a lower `RESOLUTION` if it crawls. **Never booted on a real AMD laptop**; the AMD CPU side
+(Ryzen) is untested too. `tools/test_gpu_select.sh` tests the decision logic and `tools/swiftshader-android/qemu/run.py` smoke-tests the
+driver inside Google's userspace under QEMU.
 
 ## Repository map
 
@@ -172,7 +193,8 @@ suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not c
 | `tools/make_gbos86_image.sh` | builds the flashable gbOS86 USB image into `dist/` |
 | `usb/audio/` | audio HAL config for the HDA card |
 | `usb/out/BOOTX64.EFI` | **current kernel** (build #30: #29 + gbOS86 boot menu), boots directly from UEFI |
-| `usb/patched/`, `usb/libkm_compat.so` | patched Google libraries |
+| `usb/patched/`, `usb/libkm_compat.so` | patched Google libraries (`libminigbm_gralloc.amdgpu.so`, `libgbm.amdgpu.so`; `vulkan.swiftshader.so` is fetched, not committed) |
+| `tools/swiftshader-android/` | builds SwiftShader as Android's Vulkan HAL (docker + NDK) for AMD GPUs |
 | `usb/kmod/` | `btusb`, `btintel`, `btrtl` built for kernel #29 |
 | `usb/installer/` | Alpine `sfdisk`/`mke2fs`/`e2fsck`/`mkfs.fat`/`blkid` + musl (`tools/fetch_installer_tools.sh`) |
 | `usb/firmware/` | Intel Wi-Fi + Bluetooth firmware, `regulatory.db` |
