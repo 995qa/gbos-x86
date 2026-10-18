@@ -88,6 +88,11 @@ gbos_hw_report() {
     echo "== bluetooth"; ls /sys/class/bluetooth 2>&1
     echo "== backlight"; for b in /sys/class/backlight/*; do [ -e $b ] && echo "$b max=$(cat $b/max_brightness) cur=$(cat $b/brightness)"; done
     echo "== sound"; cat /proc/asound/cards 2>&1
+    # Codec id + PCI subsystem id are what an HDA speaker/mic quirk is keyed on; the dmesg lines say why a card is missing
+    # (no machine driver, DSP firmware or topology not found, codec probe errors).
+    echo "== sound codecs"
+    for c in /proc/asound/card*/codec#*; do [ -f "$c" ] && { echo "--- $c"; grep -E '^(Codec|Address|Vendor Id|Subsystem Id|Revision Id|Default PCM|Node 0x[0-9a-f]+ \[Pin Complex\]|  Pin Default)' "$c" | head -n 40; }; done
+    echo "== sound dmesg"; dmesg | grep -iE 'sof|snd_|hdaudio|hda_|hdac|dmic|tplg|topology|skl_hda|dspcfg|audio' | head -n 80
     echo "== rfkill"; for r in /sys/class/rfkill/*; do [ -e $r ] && echo "$(cat $r/name) $(cat $r/type) soft=$(cat $r/soft) hard=$(cat $r/hard)"; done
     echo "== missing firmware"; dmesg | grep -iE 'firmware.*(failed|not found|-2\))|Direct firmware load.*failed|failed to load.*(ucode|\.bin|\.sfi)' | sort -u
     echo "== lsmod"; lsmod
