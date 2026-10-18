@@ -44,7 +44,7 @@ Boot the laptop from the stick (**F12** at the logo, Secure Boot off).
 `./build.sh --dry-run` shows what it would download (Google's 7.7 GB image, ~1 MB busybox, 14 MB of kernel modules and 70 MB of firmware
 from this repo's [release](https://github.com/linuxkid473/gbos-x86/releases)). It streams only the six partitions it needs out of
 Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download.
-Only the Dell Latitude 5300 has been tested; if you try another laptop, please post its `gbos/logs/boot-N/hwdetect.txt` in an issue
+The Dell Latitude 5300 and the Surface Laptop 7 (Intel, see below) have been tested; if you try another laptop, please post its `gbos/logs/boot-N/hwdetect.txt` in an issue
 Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind mounts of this repo's own folders automatically; don't disable SELinux.
 
 ## Status
@@ -69,7 +69,7 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 | Linux Terminal (AVF) | Secretkeeper hang fixed; VM boot not yet confirmed |
 | Auth-bound keystore keys | `soft_gk`'s auth tokens aren't trusted by the software KeyMint |
 | OS updates | Built-in OTA can't work; manual process only (see "Updating Googlebook OS") |
-| Other laptops | Only the Latitude 5300 is tested. The CPU-emulation kernel should help any pre-2021 Intel CPU |
+| Other laptops | Tested: the Latitude 5300 and the Surface Laptop 7 (Intel). The CPU-emulation kernel should help any pre-2021 Intel CPU |
 
 ## How it works
 
@@ -154,10 +154,29 @@ The kernel (#31) builds drivers for most Intel-era laptops as **modules**, and b
 | Hotkeys, fans, rfkill | Dell, HP, ThinkPad, IdeaPad, Asus, Acer, Samsung, MSI, Sony, Fujitsu, LG, Intel HID/VBTN |
 | Other | SD card readers (Realtek, SDHCI), USB webcams (UVC), Ethernet (r8169, e1000e, igc, USB r8152 and friends) |
 
-**Honest limits.** Only the Latitude 5300 has been booted; everything else is built and wired but untested on
+**Honest limits.** Only the Latitude 5300 and the Surface Laptop 7 (Intel, below) have been booted; everything else is built and wired but untested on
 hardware. Sound on SOF machines needs the codec's mixer controls to match the generated config (best effort);
 suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD discrete GPUs are not covered. Build the payload with
 `tools/fetch_firmware.sh` (firmware, not committed) and `kernel/isa_emu_patch/build_generic*.sh` (modules, not committed).
+
+## Microsoft Surface Laptop 7 (Intel, Core Ultra 7 266V / Lunar Lake)
+
+Tested on a Surface Laptop for Business 7th Edition with Intel: boots from the stick to the desktop. What works and what it needed
+(the causes and the order they were found in are in HANDOFF.md, 2026-10-18):
+
+| Works | Needs |
+|---|---|
+| Wi-Fi (BE201) | `CONFIG_IWLMLD` |
+| Internal keyboard, battery/charger, fan, platform profile | Surface Aggregator: `kernel/isa_emu_patch/surface_sl7_sam.sh`, `SERIAL_8250_RUNTIME_UARTS=4`, `PINCTRL_INTEL_PLATFORM` (the last two in `configure_whl.py --generic`) |
+| Speakers, headset jack | RT1320 amp + RT721 codec on SoundWire: `python3 kernel/isa_emu_patch/sdw_sl7.py`, firmware `realtek/rt1320/` (`tools/fetch_firmware.sh`), `usb/audio/mixer_paths_surface_laptop_7.xml` |
+| Touchpad with gestures and physical click | `tools/build_surface_tools.sh` (iptsd), `usb/surface/` |
+| Bluetooth | nothing extra |
+| Stable picture (no ghost images or freezes) | `XE_PARAMS="enable_psr=0 enable_fbc=0"` in `gbos.cfg` |
+
+Not working: internal microphone, HDMI audio, camera, touchscreen, suspend/resume. `DEVICE_MODEL="Surface Laptop 7"` in `gbos.cfg` shows
+that name as Model / Device name in Settings. Tests: `tools/test_audio_config.sh`, `tools/test_iptsd_run.sh`, `tools/test_device_model.sh`.
+Credit: nierdal's write-up and patches in linux-surface/linux-surface issue #1710 (SAM entry, SoundWire analysis, touchpad calibration and
+`LiftGraceMs`), and alex-lentz's iptsd fork.
 
 ### AMD graphics (experimental, software rendering)
 
