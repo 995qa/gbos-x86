@@ -27,7 +27,7 @@ git clone https://github.com/linuxkid473/gbos-x86 && cd gbos-x86
 Then boot the laptop from the stick (F12), turn Secure Boot off, and choose **1** (live, nothing is written to the laptop).
 `./build.sh --dry-run` shows what it would download (Google's 7.7 GB image, ~1 MB busybox, 14 MB of kernel modules and 53 MB of firmware
 from this repo's [release](https://github.com/linuxkid473/gbos-x86/releases)). It streams only the six partitions it needs out of
-Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download. Nine machines have been
+Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download. Thirteen machines have been
 tried (see [Tested laptops](#tested-laptops)); if you try another, please post its `gbos/logs/boot-N/hwdetect.txt` in an issue.
 Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind mounts of this repo's own folders automatically; don't disable SELinux.
 
@@ -54,7 +54,7 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 | Auth-bound keystore keys | `soft_gk`'s auth tokens aren't trusted by the software KeyMint |
 | Google's on-device AI (Magic Pointer, AICore) | Google's servers refuse it without hardware key attestation, which no non-Google laptop can provide. Optional replacement, chosen in the installer: the AI features answer through an OpenAI-compatible API **you** provide (address, key, model; a Gemini API key works). Text and pictures you point at go to that provider; see [`localai/README.md`](localai/README.md) (**experimental, not yet confirmed on hardware**) |
 | OS updates | Built-in OTA can't work; moving to a new Google build is semi-automated: `tools/port_build.sh`, see [`porting.md`](porting.md) |
-| Other laptops | Four of nine tried machines work fully, four partly or pending, one not; see [Tested laptops](#tested-laptops). The CPU-emulation kernel should help any pre-2021 Intel CPU |
+| Other laptops | Five of thirteen tried machines work fully, seven partly or pending, one not; see [Tested laptops](#tested-laptops). The CPU-emulation kernel should help any pre-2021 Intel CPU |
 
 ## How it works
 
@@ -118,22 +118,26 @@ changing anything.
 
 ## Tested laptops
 
-Reports from people who booted the stick (2026-10-17). A row says what was reported, not what the newest build can do. The same list is on
+Reports from people who booted the stick (2026-10-18). A row says what was reported, not what the newest build can do. The same list is on
 [gbos86.com/hardware](https://gbos86.com/hardware); the source of truth is [`website/laptops.py`](website/laptops.py).
 
 | Laptop | CPU | Result | Works | Does not work / notes |
 |---|---|---|---|---|
 | Dell Latitude 5300 | Core i5-8365U, 16 GB | **Works** | Everything tested: Wi-Fi, Bluetooth, sound, touchpad, brightness, battery, install | Suspend. The maintainer's machine |
-| Acer Aspire Lite AL15-52 | Core i5-1235U, 8 GB | **Works** | Wi-Fi, display, touchpad, keyboard, sound, brightness, camera, Bluetooth | Needed two firmware fixes (Realtek Wi-Fi; Intel AX201 Bluetooth name `ibt-0040-1050.sfi`), both in firmware v34+. Older sticks need a rebuild or an Update from a fresh stick |
+| Acer Aspire Lite AL15-52 | Core i5-1235U, 8 GB | **Works** | Wi-Fi, display, touchpad, keyboard, sound, brightness, camera, Bluetooth, SD card | Needed two firmware fixes (Realtek Wi-Fi; Intel AX201 Bluetooth name `ibt-0040-1050.sfi`), both in firmware v34+. Older sticks need a rebuild or an Update from a fresh stick |
 | Lenovo ThinkPad T470 | Intel 7th gen | **Works** | Reported as working with no setup | Short report |
 | Intel NUC8BEH (mini PC) | Core i3-8109U, 8 GB | **Works** (live) | Wi-Fi, Bluetooth, display and brightness (external monitor), keyboard (external), USB ports | Sound not tested. SATA M.2 SSD: install support for SATA disks added afterwards (QEMU-tested only, not yet tried on this NUC) |
+| HP Envy 13-aq0xxx | Core i5-8265U, 8 GB | **Works** | Reported as working great, live and installed to the NVMe (kernel #32) | Per-device detail is in the forum thread |
 | HP OmniBook 7 | Core Ultra 5 225U, 16 GB | Partly | Touchpad, keyboard, brightness, display | Wi-Fi (Intel BE201). Sound, webcam, Bluetooth not tested |
+| Dell Inspiron 7391 2-in-1 | Core i7-10510U, 8 GB | Partly | Wi-Fi, Bluetooth, touchpad, keyboard, brightness, display, webcam, touchscreen (installed to NVMe) | Sound. The reporter notes this laptop uses SOF audio firmware on regular Linux |
+| Realme Book Slim (2021) | Core i5-1135G7, 8 GB | Partly | Wi-Fi, Bluetooth, touchpad, keyboard, brightness, display, webcam (live USB) | Sound. No `hwdetect.txt` yet |
+| Fujitsu Arrows Tab V727 (tablet) | Core m3-7Y30, 8 GB | Partly | Wi-Fi (Intel 8265), Bluetooth, sound card detected (HDA Intel PCH); live USB on kernel #33, USB 2.0 | Tagged "mostly works"; what fails is not listed in the report |
 | Dell XPS 16 (2026) | Intel Core Ultra | Partly | Boots and runs | Screen refresh rate, Wi-Fi, camera. A kernel option reportedly fixes the screen: try it with `MODOPTS` in `gbos.cfg` |
 | Framework Laptop 13 Pro | Core Ultra 5 325 (Panther Lake), 16 GB | Fix pending | Boots | Black screen on sticks without the Panther Lake `xe` firmware (GuC); firmware v35 has it. Awaiting confirmation |
 | Microsoft Surface Laptop 7 (Intel) | Core Ultra 7 266V (Lunar Lake), 16 GB | Fix pending | Boots | Black screen on sticks without the Lunar Lake `xe` firmware (GuC); firmware v35 has it. Built-in keyboard not detected; Wi-Fi, sound unknown. Awaiting logs |
 | HP 14-ne0013dx | Intel | Does not work | | No logs yet |
 
-Pattern: 2017 to 2022 business and mainstream laptops work with little setup; newer Core Ultra machines boot but hit missing firmware (`xe`)
+Pattern: 2017 to 2022 business and mainstream laptops work with little setup (Wi-Fi, Bluetooth, touchpad, display, webcam). The common gap on 10th/11th-gen machines is **sound** (Inspiron 7391, Realme Book Slim), which on those uses the SOF driver; newer Core Ultra machines boot but hit missing firmware (`xe`)
 or Wi-Fi 7 cards without a working driver and firmware pair. Missing firmware is listed in `hwdetect.txt` under "missing firmware".
 To try a driver option on your own laptop, put e.g. `MODOPTS="xe.enable_panel_replay=0"` in `gbos/gbos.cfg` (modules only; see the file's comments).
 
@@ -160,7 +164,7 @@ The kernel (#31) builds drivers for most Intel-era laptops as **modules**, and b
 | Hotkeys, fans, rfkill | Dell, HP, ThinkPad, IdeaPad, Asus, Acer, Samsung, MSI, Sony, Fujitsu, LG, Intel HID/VBTN |
 | Other | SD card readers (Realtek, SDHCI), USB webcams (UVC), Ethernet (r8169, e1000e, igc, USB r8152 and friends) |
 
-**Honest limits.** Nine machines have been booted (below); anything not on that list is built and wired but untested on
+**Honest limits.** Thirteen machines have been booted (below); anything not on that list is built and wired but untested on
 hardware. Sound on SOF machines needs the codec's mixer controls to match the generated config (best effort);
 suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not covered. Build the payload with
 `tools/fetch_firmware.sh` (firmware, not committed) and `kernel/isa_emu_patch/build_generic*.sh` (modules, not committed).

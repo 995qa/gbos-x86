@@ -315,3 +315,6 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   Update: `PATCH-STATUS 5 applied, 0 not applied` and `early: patched /new/system/lib64/libcrypto.so` in `stage0-dmesg.txt`, `apex_patch: patched` lines in logcat. Rollback = the previous `usb/hook.sh`, `early_patch.sh`, `apex_patch.sh` from git.
   No newer lapis build exists yet (2026-10-18): dl.google.com still serves 16452207 (7,728,873,477 bytes) and neither aluminium-os.com nor cros.tech lists a later id, so there was nothing to re-patch for. Found on the way: three vendor APEXes
   (clearkey, crosfp, StrongBox) carry their own libcrypto with SHA-NI that no patch covers (`INFO other APEX libcrypto` in the port output).
+- 2026-10-18 Tested-laptops list from the Discord forum posts: added HP Envy 13-aq0xxx (i5-8265U, "works great", live + installed, kernel #32), Dell Inspiron 7391 2-in-1 (i7-10510U, installed; sound missing, SOF),
+  Realme Book Slim (i5-1135G7, live; sound missing), Fujitsu Arrows Tab V727 (m3-7Y30 tablet, live, kernel #33; Wi-Fi/BT/HDA card ok, the post's list of failures was cut off in the screenshot); Acer AL15-52 now also lists SD card. Now 13 machines: 5 work, 5 partly, 2 pending, 1 no.
+  Common new gap: sound on 10th/11th-gen laptops (SOF). Only the screenshot's post summaries were used; per-device detail lives in the forum threads.
