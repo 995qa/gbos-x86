@@ -195,11 +195,57 @@ wellformed "$C"
 chk "nopcm: falls back to template pcm 3" "$C" "<PlaybackPCM>hw:Weird,3</PlaybackPCM>"
 chk "nopcm: name substituted"             "$C" "<JackDev>Weird card Headphone Mic</JackDev>"
 
+# ---- 5b. SoundWire card (Surface Laptop 7 Intel: RT721 jack codec + RT1320 amp, SDCA function topology). The speaker amp has its
+#          own PCM "Speaker" (2), the jack is "Jack Out" (0) / "Jack In" (1); the "Deepbuffer ..." PCMs (31, 35) must never be picked ---
+D=$(mk sdw)
+cat > $D/cards <<'EOF'
+ 0 [sofsoundwire   ]: sof-soundwire - sof-soundwire
+                      MicrosoftCorporation-SurfaceLaptopforBusiness7thEditionwithIntel-124I00128T00
+EOF
+cat > $D/pcm <<'EOF'
+00-00: Jack Out (*) :  : playback 1
+00-01: Jack In (*) :  : capture 1
+00-02: Speaker (*) :  : playback 1
+00-05: HDMI1 (*) :  : playback 1
+00-06: HDMI2 (*) :  : playback 1
+00-07: HDMI3 (*) :  : playback 1
+00-31: Deepbuffer Jack Out (*) :  : playback 1
+00-35: Deepbuffer Speaker (*) :  : playback 1
+EOF
+cat > $D/input <<'EOF'
+N: Name="sof-soundwire Headset Jack"
+N: Name="sof-soundwire HDMI/DP,pcm=5"
+EOF
+gen sdw gbos-gen sofsoundwire sof-soundwire >/dev/null
+C=$W/out-sdw/gbos-gen/audio_config.xml
+wellformed "$C"
+python3 - "$C" > "$W/sdw.py.out" 2>&1 <<'EOF'
+import sys, xml.etree.ElementTree as E
+h = E.parse(sys.argv[1]).getroot().find('HiFi')
+def g(sec, tag):
+    e = h.find(sec); return None if e is None else e.findtext(tag)
+exp = {('Speaker','PlaybackPCM'): 'hw:sofsoundwire,2',        # not the jack's PCM 0, not Deepbuffer 35
+       ('Headphone','PlaybackPCM'): 'hw:sofsoundwire,0',      # not Deepbuffer 31
+       ('Headphone','JackDev'): 'sof-soundwire Headset Jack',
+       ('Mic','CapturePCM'): 'hw:sofsoundwire,1',
+       ('HDMI1','PlaybackPCM'): 'hw:sofsoundwire,5'}
+bad = 0
+for (s, t), v in exp.items():
+    if g(s, t) != v: print('FAIL', s, t, 'got', g(s, t), 'want', v); bad += 1
+txt = open(sys.argv[1]).read()
+for s in (',31<', ',35<', 'PCH'):
+    if s in txt: print('FAIL leftover', s); bad += 1
+print('PYOK' if not bad else 'PYBAD'); sys.exit(1 if bad else 0)
+EOF
+if [ $? = 0 ]; then ok "sdw: Speaker pcm 2, Headphone pcm 0, jack mic pcm 1, no Deepbuffer PCM, jack names"; else bad "sdw mapping: $(cat $W/sdw.py.out)"; fi
+
 # ---- 6. hook.sh: card id PCH still takes the static files, and generation is guarded -------------------------------------
 H=$ROOT/usb/hook.sh
 chk "hook: PCH uses the shipped config"   "$H" 'ASRC=$G/audio/gbos-hda-pch; ADEF=$G/audio/audio_default.xml'
 chk "hook: generation only for non-PCH"   "$H" 'if [ -n "$CID" ] && [ "$CID" != PCH ]; then'
 chk "hook: calls the generator"           "$H" 'sh $G/audio/gen_config.sh'
+chk "hook: generated config is copied into the tmpfs" "$H" 'cp -r $ASRC/. $A/$AC/'
+nochk "hook: no bind mount of the initramfs /tmp config" "$H" 'mount --bind $ASRC $A/$AC'
 sh -n "$H" && sh -n "$GEN" && ok "sh -n hook.sh gen_config.sh" || bad "syntax"
 
 echo "$n checks, $fail failed"

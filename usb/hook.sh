@@ -417,13 +417,15 @@ if [ -f $G/audio/gbos-hda-pch/audio_config.xml ]; then
       sed -i "s/HDA Intel PCH/$CNAME/g; s/PCH/$CID/g" /tmp/gbos-audio/$AC/*.xml
       sed "s/<soundcard>PCH/<soundcard>$CID/; s#gbos-hda-pch#$AC#" $G/audio/audio_default.xml > /tmp/gbos-audio/audio_default.xml
     fi
+    # ASRC lives in /tmp of the initramfs, which switch_root deletes: a bind mount of it is empty in Android (dras: "Failed to read
+    # /vendor/etc/audio/gbos-gen/audio_config.xml"), so the files are copied into the tmpfs over /vendor/etc/audio below.
     ASRC=/tmp/gbos-audio/$AC; ADEF=/tmp/gbos-audio/audio_default.xml
   else
     ASRC=$G/audio/gbos-hda-pch; ADEF=$G/audio/audio_default.xml
   fi
   mkdir -p /tmp/vaudio && mount --bind $A /tmp/vaudio && mount -t tmpfs -o mode=0755 tmpfs $A \
     && for f in /tmp/vaudio/*; do n=${f##*/}; { [ -d $f ] && mkdir -p $A/$n || touch $A/$n; } && mount --bind $f $A/$n; done \
-    && mkdir -p $A/$AC && mount --bind $ASRC $A/$AC \
+    && mkdir -p $A/$AC && cp -r $ASRC/. $A/$AC/ \
     && mount --bind $ADEF /new/vendor/etc/data/hal_configs/audio_default.xml \
     && log "hook: audio config $AC (card id ${CID:-none}, name ${CNAME:-none}) active"
 fi
