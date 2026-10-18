@@ -181,7 +181,7 @@ service gbos_sync /system/bin/sh -c "while true; do sleep 5; sync; done"
     seclabel u:r:shell:s0
 
 # Sound diagnostics, 60 s after boot: ALSA cards/PCMs/codec (incl. control names) and audioserver state.
-service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; ( head -n 3000 cards pcm devices card0/id card0/codec*; ls -l /dev/snd; dumpsys media.audio_flinger; dumpsys media.audio_policy ) > /postinstall/gbos/logs/boot-$N/audio.txt 2>&1"
+service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; ( head -n 3000 cards pcm devices card0/id card0/codec*; ls -l /dev/snd; grep '^N: Name' /proc/bus/input/devices; dumpsys media.audio_flinger; dumpsys media.audio_policy ) > /postinstall/gbos/logs/boot-$N/audio.txt 2>&1"
     user root
     group root audio
     seclabel u:r:shell:s0
@@ -397,7 +397,8 @@ grep -v 'voldmanaged=usb' $F > /tmp/fstab.android-desktop \
 # Audio: the audio HAL (dras) needs a config whose <soundcard> equals the ALSA card id. Google ships only its SOF
 # SoundWire card; gbos/audio/gbos-hda-pch is the legacy-HDA one (card id PCH, true for nearly every Intel PCH HDA
 # laptop). For any other main card (SOF: sof-hda-dsp, sof-rt5682, ...) a copy is generated with that card's id and
-# name, which is a best-effort mapping (mixer controls differ per codec).
+# name and the PCM numbers / mic / jack devices read from /proc/asound and /proc/bus/input/devices (usb/audio/gen_config.sh,
+# tools/test_audio_config.sh); the mixer controls are still a best-effort guess (they differ per codec).
 A=/new/vendor/etc/audio
 AC=gbos-hda-pch
 if [ -f $G/audio/gbos-hda-pch/audio_config.xml ]; then
@@ -405,9 +406,17 @@ if [ -f $G/audio/gbos-hda-pch/audio_config.xml ]; then
   CID=$(echo "$CARD" | sed -n 's/^ *[0-9]* \[\([^] ]*\) *\].*/\1/p'); CNAME=$(echo "$CARD" | sed -n 's/.* - //p')
   mkdir -p /tmp/gbos-audio
   if [ -n "$CID" ] && [ "$CID" != PCH ]; then
-    AC=gbos-gen; rm -rf /tmp/gbos-audio/$AC; cp -r $G/audio/gbos-hda-pch /tmp/gbos-audio/$AC
-    sed -i "s/HDA Intel PCH/$CNAME/g; s/PCH/$CID/g" /tmp/gbos-audio/$AC/*.xml
-    sed "s/<soundcard>PCH/<soundcard>$CID/; s#gbos-hda-pch#$AC#" $G/audio/audio_default.xml > /tmp/gbos-audio/audio_default.xml
+    AC=gbos-gen
+    # gen_config.sh also remaps PCM numbers, the internal mic (SOF: the DMIC PCM) and the jack input devices to what this card has
+    if [ -f $G/audio/gen_config.sh ] && AMSG=$(sh $G/audio/gen_config.sh $G/audio/gbos-hda-pch $G/audio/audio_default.xml /tmp/gbos-audio $AC "$CID" "$CNAME" 2>&1); then
+      log "hook: audio $AMSG"
+      cat /tmp/gbos-audio/$AC/audio_config.xml > $L/audio_config.generated.xml 2>/dev/null
+    else
+      log "hook: audio gen_config.sh missing or failed (${AMSG:-no output}), plain card id/name substitution"
+      rm -rf /tmp/gbos-audio/$AC; cp -r $G/audio/gbos-hda-pch /tmp/gbos-audio/$AC
+      sed -i "s/HDA Intel PCH/$CNAME/g; s/PCH/$CID/g" /tmp/gbos-audio/$AC/*.xml
+      sed "s/<soundcard>PCH/<soundcard>$CID/; s#gbos-hda-pch#$AC#" $G/audio/audio_default.xml > /tmp/gbos-audio/audio_default.xml
+    fi
     ASRC=/tmp/gbos-audio/$AC; ADEF=/tmp/gbos-audio/audio_default.xml
   else
     ASRC=$G/audio/gbos-hda-pch; ADEF=$G/audio/audio_default.xml

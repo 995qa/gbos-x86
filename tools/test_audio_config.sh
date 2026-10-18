@@ -1,0 +1,207 @@
+#!/bin/sh
+# Test of usb/audio/gen_config.sh against fake /proc/asound + /proc/bus/input/devices trees:
+#   - legacy HDA card id PCH (what the Latitude 5300 has): output must be IDENTICAL to the shipped template (PCM 0 / 3,7,8)
+#   - SOF-HDA card "sofhdadsp" (HP ENVY 13-aq0xxx, reporter's hwdetect.txt): speaker/headphone pcm0, internal mic = DMIC pcm6,
+#     headset mic pcm0, HDMI 3/4/5, jack devices "sof-hda-dsp Headphone" / "sof-hda-dsp Mic" / "sof-hda-dsp HDMI/DP,pcm=N"
+#   - a legacy HDA card with another id ("Generic"), and a SOF card with a combo jack and only one HDMI PCM
+# Also checks the XML is well-formed and that the PCH path in hook.sh is untouched (no generation for card id PCH).
+# Run: sh tools/test_audio_config.sh   (needs python3 for the XML check)
+set -u
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+GEN=$ROOT/usb/audio/gen_config.sh; TPL=$ROOT/usb/audio/gbos-hda-pch; DEFX=$ROOT/usb/audio/audio_default.xml
+W=$(mktemp -d "${TMPDIR:-/tmp}/audiotest.XXXXXX"); trap 'rm -rf "$W"' EXIT
+fail=0; n=0
+ok()  { n=$((n+1)); echo "ok   $*"; }
+bad() { n=$((n+1)); fail=$((fail+1)); echo "FAIL $*"; }
+chk() { # chk "description" file pattern  (fixed string must appear)
+  if grep -qF -- "$3" "$2"; then ok "$1"; else bad "$1: '$3' not in $2"; fi; }
+nochk() { if grep -qF -- "$3" "$2"; then bad "$1: '$3' present in $2"; else ok "$1"; fi; }
+
+wellformed() { python3 -c 'import sys,xml.etree.ElementTree as E; [E.parse(f) for f in sys.argv[1:]]' "$@" 2>"$W/xmlerr" \
+  && ok "well-formed XML: $(echo "$@" | sed "s#$W/##g")" || { bad "XML not well-formed: $(cat "$W/xmlerr")"; }; }
+
+mk() { # mk NAME : fake tree dir
+  mkdir -p "$W/$1"; echo "$W/$1"; }
+
+# ---- fake systems ----------------------------------------------------------------------------------------------------------
+# SOF-HDA, HP ENVY 13-aq0xxx (cards line from hwdetect.txt; PCMs from sof-hda-generic-2ch.tplg: ids 0,31,3,4,5,6,7)
+D=$(mk sof)
+cat > $D/cards <<'EOF'
+ 0 [sofhdadsp      ]: sof-hda-dsp - sof-hda-dsp
+                      HP-HPENVYLaptop13_aq0xxx-Type1ProductConfigId-85E2
+EOF
+cat > $D/pcm <<'EOF'
+00-00: HDA Analog (*) :  : playback 1 : capture 1
+00-03: HDMI1 (*) :  : playback 1
+00-04: HDMI2 (*) :  : playback 1
+00-05: HDMI3 (*) :  : playback 1
+00-06: DMIC (*) :  : capture 1
+00-07: DMIC16kHz (*) :  : capture 1
+00-31: HDA Analog Deep Buffer (*) :  : playback 1
+EOF
+cat > $D/input <<'EOF'
+I: Bus=0019 Vendor=0000 Product=0005 Version=0000
+N: Name="Lid Switch"
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="sof-hda-dsp Mic"
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="sof-hda-dsp Headphone"
+N: Name="sof-hda-dsp HDMI/DP,pcm=3"
+N: Name="sof-hda-dsp HDMI/DP,pcm=4"
+N: Name="sof-hda-dsp HDMI/DP,pcm=5"
+EOF
+
+# legacy HDA, Latitude 5300 (ALC3254): card id PCH, HDMI on 3/7/8, combo jack
+D=$(mk pch)
+cat > $D/cards <<'EOF'
+ 0 [PCH            ]: HDA-Intel - HDA Intel PCH
+                      HDA Intel PCH at 0xe1228000 irq 142
+EOF
+cat > $D/pcm <<'EOF'
+00-00: ALC3254 Analog : ALC3254 Analog : playback 1 : capture 1
+00-03: HDMI 0 : HDMI 0 : playback 1
+00-07: HDMI 1 : HDMI 1 : playback 1
+00-08: HDMI 2 : HDMI 2 : playback 1
+EOF
+cat > $D/input <<'EOF'
+N: Name="HDA Intel PCH Headphone Mic"
+N: Name="HDA Intel PCH HDMI/DP,pcm=3"
+N: Name="HDA Intel PCH HDMI/DP,pcm=7"
+N: Name="HDA Intel PCH HDMI/DP,pcm=8"
+EOF
+
+# legacy HDA with another card id (AMD/other board): same layout, different id
+D=$(mk generic)
+cat > $D/cards <<'EOF'
+ 1 [Generic        ]: HDA-Intel - HD-Audio Generic
+                      HD-Audio Generic at 0xf0000000 irq 33
+ 0 [NVidia         ]: HDA-Intel - HDA NVidia
+EOF
+cat > $D/pcm <<'EOF'
+01-00: ALC256 Analog : ALC256 Analog : playback 1 : capture 1
+01-01: ALC256 Digital : ALC256 Digital : playback 1
+00-03: HDMI 0 : HDMI 0 : playback 1
+EOF
+cat > $D/input <<'EOF'
+N: Name="HD-Audio Generic Headphone"
+N: Name="HD-Audio Generic Mic"
+EOF
+
+# SOF card, combo jack, only one HDMI PCM, DMIC only 16 kHz variant
+D=$(mk sofcombo)
+cat > $D/cards <<'EOF'
+ 0 [sofrt5682      ]: sof-rt5682 - sof-rt5682
+                      Google-Foo
+EOF
+cat > $D/pcm <<'EOF'
+00-00: Headset (*) :  : playback 1 : capture 1
+00-05: HDMI1 (*) :  : playback 1
+00-07: DMIC16kHz (*) :  : capture 1
+EOF
+cat > $D/input <<'EOF'
+N: Name="sof-rt5682 Headset Jack"
+N: Name="sof-rt5682 HDMI/DP,pcm=5"
+EOF
+
+# card whose layout cannot be read at all (no pcm file): must fall back to the template numbers
+D=$(mk nopcm)
+cat > $D/cards <<'EOF'
+ 0 [Weird          ]: Weird - Weird card
+EOF
+: > $D/input
+
+gen() { # gen TREE NAME CID CNAME -> $W/out-NAME
+  ASOUND=$W/$1 INPUTS=$W/$1/input; export ASOUND INPUTS
+  sh "$GEN" "$TPL" "$DEFX" "$W/out-$1" "$2" "$3" "$4" > "$W/msg-$1" 2>&1 || { bad "gen_config.sh failed on $1: $(cat $W/msg-$1)"; return 1; }
+  unset ASOUND INPUTS; cat "$W/msg-$1"; }
+
+# ---- 1. legacy PCH: identical to the template -------------------------------------------------------------------------------
+gen pch gbos-gen PCH "HDA Intel PCH" >/dev/null
+O=$W/out-pch/gbos-gen
+cmp -s "$O/audio_config.xml" "$TPL/audio_config.xml" && ok "PCH layout: audio_config.xml identical to the template" || bad "PCH: audio_config.xml differs from the template"
+cmp -s "$O/volume_curves.xml" "$TPL/volume_curves.xml" && ok "PCH: volume_curves.xml identical" || bad "PCH: volume_curves.xml differs"
+
+# ---- 2. SOF-HDA ENVY 13-aq -------------------------------------------------------------------------------------------------
+gen sof gbos-gen sofhdadsp sof-hda-dsp
+O=$W/out-sof/gbos-gen; C=$O/audio_config.xml
+wellformed "$C" "$O/mixer_paths.xml" "$O/volume_curves.xml" "$W/out-sof/audio_default.xml"
+chk "sof: soundcard id"            "$W/out-sof/audio_default.xml" "<soundcard>sofhdadsp</soundcard>"
+chk "sof: config dir"              "$W/out-sof/audio_default.xml" "<audio-config-dir>gbos-gen</audio-config-dir>"
+chk "sof: SoundCardName"           "$C" "<SoundCardName>hw:sofhdadsp</SoundCardName>"
+python3 - "$C" > "$W/sof.py.out" 2>&1 <<'EOF'
+import sys, xml.etree.ElementTree as E
+r = E.parse(sys.argv[1]).getroot(); h = r.find('HiFi')
+def g(sec, tag):
+    e = h.find(sec); return None if e is None else (e.findtext(tag))
+exp = {
+ ('Speaker','PlaybackPCM'): 'hw:sofhdadsp,0',
+ ('Headphone','PlaybackPCM'): 'hw:sofhdadsp,0',
+ ('Headphone','JackDev'): 'sof-hda-dsp Headphone',
+ ('Headphone','JackSwitch'): '2',
+ ('InternalMic','CapturePCM'): 'hw:sofhdadsp,6',      # DMIC, not the headset jack
+ ('Mic','CapturePCM'): 'hw:sofhdadsp,0',
+ ('Mic','JackDev'): 'sof-hda-dsp Mic',
+ ('Mic','CaptureMixerElem'): 'Capture',
+ ('HDMI1','PlaybackPCM'): 'hw:sofhdadsp,3', ('HDMI1','JackDev'): 'sof-hda-dsp HDMI/DP,pcm=3',
+ ('HDMI2','PlaybackPCM'): 'hw:sofhdadsp,4', ('HDMI2','JackDev'): 'sof-hda-dsp HDMI/DP,pcm=4',
+ ('HDMI3','PlaybackPCM'): 'hw:sofhdadsp,5', ('HDMI3','JackDev'): 'sof-hda-dsp HDMI/DP,pcm=5',
+}
+bad = 0
+for (s, t), v in exp.items():
+    if g(s, t) != v: print('FAIL', s, t, 'got', g(s, t), 'want', v); bad += 1
+# no section may keep a PCH / legacy name or point at a DMIC/deep-buffer PCM for playback
+txt = open(sys.argv[1]).read()
+for s in ('PCH', 'HDA Intel', ',7<', ',8<', ',31<'):
+    if s in txt: print('FAIL leftover', s); bad += 1
+# every required field of Google's sections is still there (dras rejects the file on a missing field)
+for sec, tags in {'Speaker':['PlaybackPCM'], 'Headphone':['PlaybackPCM','JackDev','JackSwitch'],
+                  'InternalMic':['CapturePCM','IntrinsicSensitivity','RampUpMs'], 'Mic':['CapturePCM','CaptureMixerElem','JackDev'],
+                  'HDMI1':['PlaybackPCM','JackDev','PlaybackChannels']}.items():
+    for t in tags:
+        if g(sec, t) is None: print('FAIL missing', sec, t); bad += 1
+print('PYOK' if not bad else 'PYBAD')
+sys.exit(1 if bad else 0)
+EOF
+if [ $? = 0 ]; then ok "sof: all device numbers / jack names / required fields ($(grep -c . $W/sof.py.out) line)"; else bad "sof mapping: $(cat $W/sof.py.out)"; fi
+chk "sof: mixer unmutes Bass Speaker"   "$O/mixer_paths.xml" 'name="Bass Speaker Playback Switch"'
+chk "sof: mixer keeps Speaker switch"   "$O/mixer_paths.xml" 'name="Speaker Playback Switch"'
+chk "sof: mixer jack mic switch"        "$O/mixer_paths.xml" 'name="Mic Capture Switch"'
+
+# ---- 3. legacy card with another id -----------------------------------------------------------------------------------------
+gen generic gbos-gen Generic "HD-Audio Generic" >/dev/null
+C=$W/out-generic/gbos-gen/audio_config.xml
+wellformed "$C"
+chk "generic: playback pcm 0"  "$C" "<PlaybackPCM>hw:Generic,0</PlaybackPCM>"
+chk "generic: internal mic = analog capture 0 (no DMIC)" "$C" "<CapturePCM>hw:Generic,0</CapturePCM>"
+chk "generic: card number taken from /proc/asound/cards (card 1; the NVidia card 0 PCM 3 is not used)" "$C" "<CapturePCM>hw:Generic,0</CapturePCM>"
+nochk "generic: no HDMI sections (this card has no HDMI PCM)" "$C" "<HDMI1>"
+chk "generic: jack names"      "$C" "<JackDev>HD-Audio Generic Headphone</JackDev>"
+chk "generic: mic jack"        "$C" "<JackDev>HD-Audio Generic Mic</JackDev>"
+
+# ---- 4. SOF, combo jack, one HDMI, only DMIC16kHz ---------------------------------------------------------------------------
+gen sofcombo gbos-gen sofrt5682 sof-rt5682 >/dev/null
+C=$W/out-sofcombo/gbos-gen/audio_config.xml
+wellformed "$C"
+chk "combo: headphone jack"    "$C" "<JackDev>sof-rt5682 Headset Jack</JackDev>"
+chk "combo: internal mic = DMIC16kHz pcm 7" "$C" "<CapturePCM>hw:sofrt5682,7</CapturePCM>"
+chk "combo: HDMI1 on pcm 5"    "$C" "<JackDev>sof-rt5682 HDMI/DP,pcm=5</JackDev>"
+nochk "combo: HDMI2 dropped"   "$C" "<HDMI2>"
+nochk "combo: HDMI3 dropped"   "$C" "<HDMI3>"
+
+# ---- 5. unreadable layout: template numbers, only card id/name substituted -------------------------------------------------
+gen nopcm gbos-gen Weird "Weird card" >/dev/null
+C=$W/out-nopcm/gbos-gen/audio_config.xml
+wellformed "$C"
+chk "nopcm: falls back to template pcm 3" "$C" "<PlaybackPCM>hw:Weird,3</PlaybackPCM>"
+chk "nopcm: name substituted"             "$C" "<JackDev>Weird card Headphone Mic</JackDev>"
+
+# ---- 6. hook.sh: card id PCH still takes the static files, and generation is guarded -------------------------------------
+H=$ROOT/usb/hook.sh
+chk "hook: PCH uses the shipped config"   "$H" 'ASRC=$G/audio/gbos-hda-pch; ADEF=$G/audio/audio_default.xml'
+chk "hook: generation only for non-PCH"   "$H" 'if [ -n "$CID" ] && [ "$CID" != PCH ]; then'
+chk "hook: calls the generator"           "$H" 'sh $G/audio/gen_config.sh'
+sh -n "$H" && sh -n "$GEN" && ok "sh -n hook.sh gen_config.sh" || bad "syntax"
+
+echo "$n checks, $fail failed"
+[ $fail = 0 ] && echo AUDIO_CONFIG_TEST_PASS
+exit $fail
