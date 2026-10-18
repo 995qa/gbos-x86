@@ -5,7 +5,10 @@ set -e
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${1:-$ROOT/kernel/out/busybox}
 mkdir -p "$(dirname "$OUT")"
-D=$(mktemp -d)
+# Temp dir inside the checkout, not /tmp: Docker Desktop on Linux only shares the user's home, so a bind mount from
+# /tmp fails with "mounts denied: The path /tmp/... is not shared from the host".
+mkdir -p "$ROOT/build"
+D=$(mktemp -d "$ROOT/build/busybox.XXXXXX")
 # Fedora/RHEL (SELinux enforcing): bind mounts need :z or the container gets "Permission denied". Only the fresh temp dir.
 Z=; [ "$(getenforce 2>/dev/null)" = Enforcing ] && Z=:z
 docker run --rm --platform linux/amd64 -v "$D":/out$Z debian:trixie-slim sh -c '
