@@ -193,6 +193,7 @@ on property:sys.boot_completed=1
     # KMS debug was on during the HWC's first modesets (set early in hook.sh); turn it off again.
     write /sys/module/drm/parameters/debug 0
     start gbos_audiodiag
+    start gbos_iptsd
     start gbos_wmsize
     start gbos_displaydiag
     start gbos_aidiag
@@ -249,6 +250,15 @@ service gbos_displaydiag /system/bin/sh -c "sleep 70; ( mount -t debugfs debugfs
     group root graphics
     seclabel u:r:shell:s0
     oneshot
+
+# Touchpad gestures on the Surface Laptop 7: iptsd (a fork) turns the touchpad's raw frames into a multitouch uinput device.
+# The script exits at once without surface/iptsd on the stick and when the machine has no such touchpad; oneshot so init does not restart it.
+service gbos_iptsd /system/bin/sh /postinstall/gbos/surface/iptsd-run.sh $N
+    user root
+    group root input
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
 
 # Software Gatekeeper (gatekeeper/soft_gk.c) in place of the Trusty one, which never answers.
 service gbos_soft_gk /postinstall/gbos/soft_gk
