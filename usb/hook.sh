@@ -1,6 +1,39 @@
 # gbos pre-Android hook: sourced by stage0 just before switch_root (Android root at /new,
 # helpers log/fail/shell and $G=/gbos/gbos available). Edit freely, no kernel rebuild needed.
 
+# Library patches. patched/MANIFEST (written by tools/port_build.py) has one line per patch: kind, the path in the Android root
+# (/new/...), the sha256 of the exact original the patch was made from, and the patched file (relative to gbos/). A patch is
+# bound only over a file with that hash, so a new Google build never gets a stale patch: the line says "NOT patched" and shows
+# the hash it found, which is what tools/port_build.sh needs to regenerate the patch. kind "early" = also bound by early_patch.sh
+# before the first dmctl (then already mounted here), "apex" lines belong to apex_patch.sh.
+gbos_bind_patches() {
+  gp_ok=0; gp_bad=0
+  if [ ! -f $G/patched/MANIFEST ]; then
+    log "hook: PATCH-STATUS patched/MANIFEST missing: no library patches (SHA-NI/AVX-VNNI code will be emulated, very slow)"
+    return 0
+  fi
+  while read -r gp_kind gp_target gp_want gp_file gp_rest; do
+    case $gp_kind in early|bind) ;; *) continue;; esac
+    if grep -q " $gp_target " /proc/mounts; then
+      log "hook: $gp_target already patched (early_patch.sh)"; gp_ok=$((gp_ok+1))
+    elif [ ! -f $G/$gp_file ]; then
+      log "hook: $gp_target NOT patched (missing $gp_file)"; gp_bad=$((gp_bad+1))
+    elif [ ! -f $gp_target ]; then
+      log "hook: $gp_target NOT patched (not in this Google build)"; gp_bad=$((gp_bad+1))
+    else
+      gp_have=$(sha256sum $gp_target | cut -d' ' -f1)
+      if [ "$gp_have" != "$gp_want" ]; then
+        log "hook: $gp_target NOT patched (original is $gp_have, patch was made for $gp_want: run tools/port_build.sh)"; gp_bad=$((gp_bad+1))
+      elif mount --bind $G/$gp_file $gp_target; then
+        log "hook: patched $gp_target ($gp_file) active"; gp_ok=$((gp_ok+1))
+      else
+        log "hook: $gp_target NOT patched (bind mount failed)"; gp_bad=$((gp_bad+1))
+      fi
+    fi
+  done < $G/patched/MANIFEST
+  log "hook: PATCH-STATUS $gp_ok applied, $gp_bad not applied"
+}
+
 # zram is a module here (=m in Google's config too); mmd_setup aborts without /sys/block/zram0.
 modprobe zram && log "hook: zram loaded" || log "hook: modprobe zram FAILED"
 
@@ -286,12 +319,8 @@ sed 's/^    start trusty_security_vm_launcher$/    # gbos: plain launcher disabl
 # Software KeyMint: Trusty's TEE KeyMint needs Google's security chip for its root of trust and
 # hangs without it. Hide the Trusty KeyMint/RKP/SecureClock declarations so keystore2 uses
 # km_compat, and use a libkm_compat patched to serve its software KeyMint for every security level.
-KM=/new/system/lib64/libkm_compat.so
-if [ -f $G/libkm_compat.so ] && [ "$(sha256sum $KM | cut -d' ' -f1)" = "be92d0a47d07a4a928ad1395f470195870dfdd16825866b7eaf3dd670d9b2461" ]; then
-  mount --bind $G/libkm_compat.so $KM && log "hook: software KeyMint (patched libkm_compat) active"
-else
-  log "hook: libkm_compat NOT patched (missing patch or unexpected original)"
-fi
+# All library patches (this one, libz, libcrypto) are bound here from patched/MANIFEST: see gbos_bind_patches above.
+gbos_bind_patches
 [ -f $G/system_ext_manifest.xml ] && mount --bind $G/system_ext_manifest.xml /new/system_ext/etc/vintf/manifest.xml \
   && log "hook: Trusty KeyMint VINTF declarations hidden"
 # StrongBox KeyMint (vendor APEX) needs the security chip too, and keystore2 aborts boot when a
@@ -374,30 +403,3 @@ if mount -t tracefs tracefs $T; then
 else
   log "hook: tracefs mount FAILED"
 fi
-
-# libz: adler32_z's AVX-VNNI helper (vpdpwssd) traps on this CPU (~half of all emulated instructions).
-# The patched copies (tools/patch_libz_adler.py) make adler32_z always take its scalar path. Each is only
-# bind-mounted over the exact original it was made from.
-for p in system:/new/system/lib64/libz.so:371f70d6a9392327cb36838d0cbc7af7388d1689c25d91cd343af8e58433683b vendor:/new/vendor/lib64/libz.so:e45aecb65cbb40f0c3070b05aa9d974076d401ed6f2aff3081af26a14e812590; do
-  n=${p%%:*}; r=${p#*:}; t=${r%%:*}; h=${r#*:}
-  if grep -q " $t " /proc/mounts; then
-    log "hook: $n libz already patched (early_patch.sh)"
-  elif [ -f $G/patched/$n.libz.so ] && [ "$(sha256sum $t | cut -d' ' -f1)" = "$h" ]; then
-    mount --bind $G/patched/$n.libz.so $t && log "hook: patched $n libz (scalar adler32) active"
-  else
-    log "hook: $n libz NOT patched (missing patch or unexpected original)"
-  fi
-done
-
-# libcrypto: SHA-NI block functions trap here; the patched copies (tools/sha_redirect.py) send them to the
-# scalar siblings. Hash-gated like libz.
-for p in system:/new/system/lib64/libcrypto.so:0ee96c7e0cb1ffca5520d2eaca02b4fa2ccff5a8fcb753a491e85555a91c9f2a vendor:/new/vendor/lib64/libcrypto.so:70cc371baf9925d5f1f857d03177d5193caf60bb13bb2012b4336657adcf48e7; do
-  n=${p%%:*}; r=${p#*:}; t=${r%%:*}; h=${r#*:}
-  if grep -q " $t " /proc/mounts; then
-    log "hook: $n libcrypto already patched (early_patch.sh)"
-  elif [ -f $G/patched/$n.libcrypto.so ] && [ "$(sha256sum $t | cut -d' ' -f1)" = "$h" ]; then
-    mount --bind $G/patched/$n.libcrypto.so $t && log "hook: patched $n libcrypto (scalar SHA) active"
-  else
-    log "hook: $n libcrypto NOT patched (missing patch or unexpected original)"
-  fi
-done

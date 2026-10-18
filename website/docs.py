@@ -93,7 +93,7 @@ def cpu():
 <h2>Binding them early</h2>
 <p>The patched files are bind-mounted over the originals. <code>early_patch.sh</code> does this before stage0's first partition-mapping call, because every mapping process loads <code>libcrypto</code>, whose start-up integrity check runs SHA-256 through SHA-NI: about 3.7 million emulated instructions and roughly 2 seconds of boot. <code>hook.sh</code> repeats the binds later as a fail-safe and logs <code>already patched</code> if the early pass got there first.</p>
 <h2>Hash pinning</h2>
-<p>A patch is only applied when the sha256 of the original file matches the one it was made from. When Google ships a new build the files change, the patches stop applying <em>silently</em> and boot gets slower, so the logs state it explicitly (<code>NOT patched</code>). A new Google build therefore needs the patches regenerated (see <a href="/docs/updating">Updating</a>).</p>
+<p>A patch is only applied when the sha256 of the original file matches the one it was made from. When Google ships a new build the files change, the patches stop applying <em>silently</em> and boot gets slower, so the logs state it explicitly (<code>NOT patched</code>, with the hash that was found). The hashes are recorded in <code>usb/patched/MANIFEST</code>, which <code>tools/port_build.sh</code> regenerates for a new build (see <a href="/docs/updating">Updating</a>).</p>
 <h2>Faster on newer CPUs</h2>
 <p>Machines that have the instructions natively never trap, so the emulation costs nothing there. The slowest case is a pre-2021 CPU such as the Whiskey Lake i5-8365U the project is tested on.</p>'''
 
@@ -213,10 +213,10 @@ def updating():
 <p>Update copies the system images, scripts, patched libraries, firmware, kernel modules, audio configs, installer tools and the kernel itself, but not your <code>MODE</code> setting.</p>
 <h2>Moving to a newer Google build</h2>
 <p>Android's built-in updater cannot work: it expects Google's own A/B partitions and kernel. A newer Googlebook OS build is a manual process:</p>
-<ol><li>Download the new recovery image, extract the partitions and rebuild <code>super.img</code>.</li>
-<li>Scan it for CPU instructions the emulator does not cover (AVX-512, AMX and similar).</li>
-<li><strong>Re-check every hash-pinned patch</strong> (<code>libz</code>, <code>libcrypto</code>, the software KeyMint library): a new build has new files, so patches silently stop applying until regenerated, and renamed vendor files stop being hidden.</li>
-<li>Copy to the stick and run <b>1 (Update)</b>. Data carries over; going back to an older build requires wiping data.</li></ol>'''
+<ol><li><code>tools/check_new_build.sh</code> says whether a newer build exists; put it in <code>lapis/BUILD</code> and run <code>./build.sh</code> to fetch it and rebuild <code>super.img</code>.</li>
+<li><code>tools/port_build.sh --isa</code> re-applies every binary patch (<code>libz</code>, <code>libcrypto</code>, the software KeyMint library, the VINTF manifest) to the new files, checks the paths and lines the boot scripts rely on (renamed vendor files that would stop being hidden are reported) and scans for CPU instructions the emulator does not cover (AVX-512, AMX and similar). <code>--write</code> stores the result once it reports no failures.</li>
+<li>Copy to the stick and run <b>1 (Update)</b>. <code>PATCH-STATUS N applied, 0 not applied</code> in <code>stage0-dmesg.txt</code> confirms the patches bound. Data carries over; going back to an older build requires wiping data.</li></ol>
+<p>The full procedure is <code>porting.md</code> in the repository.</p>'''
 
 
 @doc('building', 'Building from source', 'The outline of building the kernel, payload and image.')

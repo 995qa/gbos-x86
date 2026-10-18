@@ -35,7 +35,8 @@ Read `README.md` (what/how) and `HANDOFF.md` (chronological log of every bug and
 - **Google's audio HAL (`dras`)** matches `<soundcard>` against the ALSA card **id** (`PCH`), and rejects a
   config section that is missing any field the sof-soundwire config has.
 - **Hash-pinned patches:** `hook.sh`/`apex_patch.sh` only bind a patched library when the original's
-  sha256 matches. A new Google build disables them silently; look for `NOT patched` in `stage0-dmesg.txt`.
+  sha256 in `usb/patched/MANIFEST` matches. A new Google build disables them; look for `NOT patched` / `PATCH-STATUS` in
+  `stage0-dmesg.txt`. Never edit the MANIFEST or the patched files by hand: `tools/port_build.sh --write` regenerates them (see `porting.md`).
 - **drm_hwcomposer is written for Google's xe driver.** On i915 it silently falls back (e.g. `LOG_GAMMA_LUT` → `GAMMA_LUT`,
   logged every frame by `drmhwc`). Check `drmhwc` lines in logcat before blaming the panel or the colour pipeline.
 - **Trusty-backed services** (Weaver, Gatekeeper, Secretkeeper, KeyMint, GSC) never answer here. A hang

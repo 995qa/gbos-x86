@@ -23,7 +23,8 @@ MODS=gbos86-modules-6.18.21-gbos-whl.tar.xz;               MODS_SHA=876705e2f707
 # v35 firmware = everything the shipped kernel modules ask for (tools/fw_wanted.py) + run-time-named families (amdgpu, rtl_nic, ath12k, cirrus, ...)
 REL_FW=https://github.com/linuxkid473/gbos-x86/releases/download/v35
 FW=gbos86-firmware-12dfe670-sof2026.09.2-r4.tar.xz;        FW_SHA=8ad4ce620194e6555fe747bff95eb75b74c3c8f198ff7e3d5280c02f37bb1463
-GOOGLE=https://dl.google.com/device/recovery/lapis-user/16452207/recovery.zip
+# The Google build comes from lapis/BUILD (one place to change when moving to a new build: see porting.md)
+. lapis/BUILD; GOOGLE=$URL
 PARTS="system_a vendor_a product_a system_ext_a system_dlkm_a vendor_dlkm_a"
 
 say() { printf '\n== %s\n' "$*"; }

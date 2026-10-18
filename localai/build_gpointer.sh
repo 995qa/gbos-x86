@@ -16,7 +16,7 @@ if command -v dump.erofs >/dev/null 2>&1; then
   dump.erofs --cat --path=$P "$IMG" > "$T/original.apk"
 else
   Z=; [ "$(getenforce 2>/dev/null)" = Enforcing ] && Z=:z
-  docker run --rm --platform linux/amd64 --entrypoint sh -v "$(dirname "$IMG")":/in:ro$Z gbos-erofs \
+  docker run --rm --entrypoint sh -v "$(dirname "$IMG")":/in:ro$Z gbos-erofs \
     -c "dump.erofs --cat --path=$P /in/$(basename "$IMG")" > "$T/original.apk"
 fi
 python3 -I "$HERE/patch_gpointer.py" "$T/original.apk" "$T/patched.apk"

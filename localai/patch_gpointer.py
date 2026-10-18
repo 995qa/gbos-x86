@@ -11,22 +11,101 @@ It is a local compatibility patch to the app's own check; it changes nothing the
 
 The APK is patched in place, same size: the dex's header checksum and SHA-1, and the zip CRC (local header + central directory),
 are updated. Google's signature block is left untouched (it no longer verifies; whether the system accepts that is checked on the
-device). Refuses to run unless the input is exactly the build this patch was made for.
+device).
+
+The patch site is found by structure, not by address, so it survives a new Google build: in every stored classes*.dex it
+looks for the class ...ErrorsKt, its <clinit>, and the one `sget-object` there that loads the field named
+TEXT_QUERY_WITH_ATTACHMENTS_CAPABILITY (an enum constant of RobinIntegrationCapability); that index is replaced by the index of the
+TEXT_QUERY_CAPABILITY constant of the same class. It refuses to patch unless there is exactly one such site. The sha256 below is only
+the build the patch was first made on (reported, no longer required).
 
 Usage: patch_gpointer.py ORIGINAL.apk PATCHED.apk
+       patch_gpointer.py --check ORIGINAL.apk       report the patch site, change nothing
 """
 import hashlib
+import re
 import shutil
 import struct
 import sys
 import zlib
 
-ORIGINAL_SHA256 = "ce8d7e3864905bd68b3398654f7d5be6e6d04ac252b1de8a0d2bc6c59251078e"
-DEX_NAME = b"classes11.dex"
-# Offset inside classes11.dex of: sget-object v1, RobinIntegrationCapability.<field 0x0814>  (62 01 14 08)
-INSN_OFFSET = 0x289870
-EXPECT = bytes.fromhex("62011408")
-PATCHED = bytes.fromhex("62011208")
+KNOWN_SHA256 = "ce8d7e3864905bd68b3398654f7d5be6e6d04ac252b1de8a0d2bc6c59251078e"   # first build (classes11.dex +0x289870)
+HOLDER_CLASS = b"ErrorsKt;"
+FIELD_ATT = b"TEXT_QUERY_WITH_ATTACHMENTS_CAPABILITY"
+FIELD_TEXT = b"TEXT_QUERY_CAPABILITY"
+SGET_OBJECT = 0x62
+
+
+def uleb(d, p):
+    r = s = 0
+    while True:
+        b = d[p]
+        p += 1
+        r |= (b & 0x7F) << s
+        if not b & 0x80:
+            return r, p
+        s += 7
+
+
+def find_site(dex):
+    """-> (offset of the sget-object instruction, field index to load instead), or None if this dex has no such site."""
+    if dex[:4] != b"dex\n":
+        return None
+    u32 = lambda o: struct.unpack_from("<I", dex, o)[0]
+    n_str, o_str, n_typ, o_typ, _, _, n_fld, o_fld, n_mth, o_mth, n_cls, o_cls = struct.unpack_from("<IIIIIIIIIIII", dex, 0x38)
+
+    def string(i):
+        p = u32(o_str + 4 * i)
+        _, p = uleb(dex, p)
+        return bytes(dex[p:dex.index(b"\0", p)])
+
+    def type_name(i):
+        return string(u32(o_typ + 4 * i))
+    fields = [struct.unpack_from("<HHI", dex, o_fld + 8 * i) for i in range(n_fld)]   # class_idx, type_idx, name_idx
+    att = [i for i, f in enumerate(fields) if string(f[2]) == FIELD_ATT]
+    if not att:
+        return None
+    sites = []
+    for ci in range(n_cls):
+        cdef = struct.unpack_from("<IIIIIIII", dex, o_cls + 32 * ci)
+        if not type_name(cdef[0]).endswith(HOLDER_CLASS) or not cdef[6]:
+            continue
+        p = cdef[6]
+        n_sf, n_if, n_dm, n_vm = [0] * 4
+        n_sf, p = uleb(dex, p)
+        n_if, p = uleb(dex, p)
+        n_dm, p = uleb(dex, p)
+        n_vm, p = uleb(dex, p)
+        for _ in range(n_sf + n_if):
+            _, p = uleb(dex, p)
+            _, p = uleb(dex, p)
+        midx = 0
+        for _ in range(n_dm + n_vm):
+            d, p = uleb(dex, p)
+            _, p = uleb(dex, p)
+            code_off, p = uleb(dex, p)
+            midx += d
+            if not code_off:
+                continue
+            mname = string(struct.unpack_from("<HHI", dex, o_mth + 8 * midx)[2])
+            if mname != b"<clinit>":
+                continue
+            insns_size = u32(code_off + 12)
+            base = code_off + 16
+            for u in range(0, insns_size * 2 - 3, 2):
+                if dex[base + u] == SGET_OBJECT and struct.unpack_from("<H", dex, base + u + 2)[0] in att:
+                    sites.append(base + u)
+    if not sites:
+        return None
+    if len(sites) != 1:
+        raise ValueError("%d candidate sites in one dex" % len(sites))
+    off = sites[0]
+    fidx = struct.unpack_from("<H", dex, off + 2)[0]
+    cls = fields[fidx][0]
+    text = [i for i, f in enumerate(fields) if f[0] == cls and string(f[2]) == FIELD_TEXT]
+    if len(text) != 1:
+        raise ValueError("expected one %s field next to %s, found %d" % (FIELD_TEXT.decode(), FIELD_ATT.decode(), len(text)))
+    return off, text[0]
 
 
 def sha256(path):
@@ -37,63 +116,83 @@ def sha256(path):
     return h.hexdigest()
 
 
-def main():
-    if len(sys.argv) != 3:
-        sys.exit(__doc__)
-    src, dst = sys.argv[1], sys.argv[2]
-    got = sha256(src)
-    if got != ORIGINAL_SHA256:
-        sys.exit("refusing: %s is not the Magic Pointer build this patch was made for\n  sha256 %s\n  expected %s" % (src, got, ORIGINAL_SHA256))
-    shutil.copyfile(src, dst)
-    with open(dst, "r+b") as f:
-        # The zip's index (EOCD + central directory) is at the end; read just enough of the file to locate the entry.
-        f.seek(0, 2)
-        size = f.tell()
-        f.seek(size - (16 << 20))
-        tail_base = size - (16 << 20)
-        tail = f.read()
-        # find_entry works on offsets relative to the buffer start, so rebase.
-        eocd = tail.rfind(b"PK\x05\x06")
-        n_entries, cd_size, cd_off = struct.unpack("<HII", tail[eocd + 10:eocd + 20])
-        cd = tail[cd_off - tail_base:cd_off - tail_base + cd_size]
-        lho = cdp = usize = None
-        p = 0
-        for _ in range(n_entries):
-            flags, method = struct.unpack("<HH", cd[p + 8:p + 12])
-            nlen, elen, clen = struct.unpack("<HHH", cd[p + 28:p + 34])
-            if cd[p + 46:p + 46 + nlen] == DEX_NAME:
-                if method != 0 or flags & 8:
-                    sys.exit("classes11.dex is not a plainly stored entry")
-                usize = struct.unpack("<I", cd[p + 24:p + 28])[0]
-                lho = struct.unpack("<I", cd[p + 42:p + 46])[0]
-                cdp = cd_off + p
-                break
-            p += 46 + nlen + elen + clen
-        if lho is None:
-            sys.exit("classes11.dex not found")
+def zip_entries(f):
+    """-> [(name, local header offset, central dir entry offset, method, flags, size)] from the zip index at the end of the file."""
+    f.seek(0, 2)
+    size = f.tell()
+    tail_base = max(0, size - (16 << 20))
+    f.seek(tail_base)
+    tail = f.read()
+    eocd = tail.rfind(b"PK\x05\x06")
+    n_entries, cd_size, cd_off = struct.unpack("<HII", tail[eocd + 10:eocd + 20])
+    cd = tail[cd_off - tail_base:cd_off - tail_base + cd_size]
+    out, p = [], 0
+    for _ in range(n_entries):
+        flags, method = struct.unpack("<HH", cd[p + 8:p + 12])
+        usize, = struct.unpack("<I", cd[p + 24:p + 28])
+        nlen, elen, clen = struct.unpack("<HHH", cd[p + 28:p + 34])
+        lho, = struct.unpack("<I", cd[p + 42:p + 46])
+        out.append((cd[p + 46:p + 46 + nlen], lho, cd_off + p, method, flags, usize))
+        p += 46 + nlen + elen + clen
+    return out
+
+
+def locate(f):
+    """-> (dex name, data offset, dex bytes, insn offset, new field index, local header offset, central entry offset)."""
+    found = []
+    for name, lho, cdp, method, flags, usize in zip_entries(f):
+        if not re.fullmatch(rb"classes\d*\.dex", name):
+            continue
+        if method != 0 or flags & 8:
+            sys.exit("%s is not a plainly stored entry (compressed dex: not supported)" % name.decode())
         f.seek(lho)
         lh = f.read(30)
         assert lh[:4] == b"PK\x03\x04", "bad local header"
         nlen, elen = struct.unpack("<HH", lh[26:30])
         data_off = lho + 30 + nlen + elen
-
         f.seek(data_off)
-        dex = bytearray(f.read(usize))
-        if bytes(dex[INSN_OFFSET:INSN_OFFSET + 4]) != EXPECT:
-            sys.exit("unexpected bytes at the patch site: %s" % bytes(dex[INSN_OFFSET:INSN_OFFSET + 4]).hex())
-        dex[INSN_OFFSET:INSN_OFFSET + 4] = PATCHED
-        # dex header: checksum (adler32 of bytes 12..end) at 8, SHA-1 signature (of bytes 32..end) at 12.
-        dex[12:32] = hashlib.sha1(bytes(dex[32:])).digest()
-        struct.pack_into("<I", dex, 8, zlib.adler32(bytes(dex[12:])) & 0xFFFFFFFF)
-        crc = zlib.crc32(bytes(dex)) & 0xFFFFFFFF
+        dex = f.read(usize)
+        try:
+            site = find_site(dex)
+        except ValueError as e:
+            sys.exit("%s: %s" % (name.decode(), e))
+        if site:
+            found.append((name.decode(), data_off, dex, site[0], site[1], lho, cdp))
+    if len(found) != 1:
+        sys.exit("expected exactly one %s load in a %s.<clinit>, found it in %d dex files. The Magic Pointer changed: look at\n"
+                 "  ErrorsKt.requiredCapabilities in jadx and extend find_site()" % (FIELD_ATT.decode(), HOLDER_CLASS.decode(), len(found)))
+    return found[0]
 
+
+def main():
+    check = len(sys.argv) == 3 and sys.argv[1] == "--check"
+    if not check and len(sys.argv) != 3:
+        sys.exit(__doc__)
+    src = sys.argv[2] if check else sys.argv[1]
+    known = " (the build this patch was first made on)" if sha256(src) == KNOWN_SHA256 else ""
+    with open(src, "rb") as f:
+        name, data_off, dex, off, fidx, lho, cdp = locate(f)
+    old = bytes(dex[off:off + 4])
+    new = old[:2] + struct.pack("<H", fidx)
+    print("%s%s: patch site %s +0x%x  %s -> %s" % (src, known, name, off, old.hex(), new.hex()))
+    if check:
+        return
+    dst = sys.argv[2]
+    shutil.copyfile(src, dst)
+    dex = bytearray(dex)
+    dex[off:off + 4] = new
+    # dex header: checksum (adler32 of bytes 12..end) at 8, SHA-1 signature (of bytes 32..end) at 12.
+    dex[12:32] = hashlib.sha1(bytes(dex[32:])).digest()
+    struct.pack_into("<I", dex, 8, zlib.adler32(bytes(dex[12:])) & 0xFFFFFFFF)
+    crc = zlib.crc32(bytes(dex)) & 0xFFFFFFFF
+    with open(dst, "r+b") as f:
         f.seek(data_off)
         f.write(dex)
         f.seek(lho + 14)
         f.write(struct.pack("<I", crc))
         f.seek(cdp + 16)
         f.write(struct.pack("<I", crc))
-    print("patched %s -> %s (classes11.dex: %d bytes at +0x%x, crc %08x)" % (src, dst, usize, INSN_OFFSET, crc))
+    print("patched %s -> %s (%s: %d bytes, crc %08x)" % (src, dst, name, len(dex), crc))
     print("sha256 %s" % sha256(dst))
 
 
