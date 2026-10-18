@@ -193,6 +193,7 @@ on property:sys.boot_completed=1
     # KMS debug was on during the HWC's first modesets (set early in hook.sh); turn it off again.
     write /sys/module/drm/parameters/debug 0
     start gbos_audiodiag
+    start gbos_devname
     start gbos_iptsd
     start gbos_wmsize
     start gbos_displaydiag
@@ -256,6 +257,14 @@ service gbos_displaydiag /system/bin/sh -c "sleep 70; ( mount -t debugfs debugfs
 service gbos_iptsd /system/bin/sh /postinstall/gbos/surface/iptsd-run.sh $N
     user root
     group root input
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
+
+# "Device name" in Settings (Settings.Global.device_name): kept in step with DEVICE_MODEL from gbos.cfg.
+service gbos_devname /system/bin/sh -c "sleep 15; [ -n '$DEVICE_MODEL' ] && settings put global device_name '$DEVICE_MODEL'"
+    user root
+    group root
     seclabel u:r:shell:s0
     oneshot
     disabled
@@ -340,6 +349,7 @@ case "$DENSITY" in ''|*[!0-9]*) DENSITY=;; esac
 DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_color_display=|^ro.surface_flinger.has_HDR_display='
 [ "$GPU_SW" = 1 ] && DROP="$DROP|^ro.surface_flinger.supports_background_blur=|^ro.vendor.hwc.use_overlay_planes="   # blur on the CPU is far too slow
 [ -n "$DENSITY" ] && DROP="$DROP|^ro.sf.lcd_density="
+[ -n "$DEVICE_MODEL" ] && DROP="$DROP|^ro.product.model=|^ro.product.vendor.model=|^ro.product.marketname=|^ro.product.vendor.marketname="
 { grep -v -E "$DROP" /new/vendor/build.prop
   echo "ro.surface_flinger.has_wide_color_display=false"
   echo "ro.surface_flinger.has_HDR_display=false"
@@ -350,6 +360,12 @@ DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_c
     echo "ro.vendor.hwc.use_overlay_planes=false"
   fi
   if [ -n "$DENSITY" ]; then echo "ro.sf.lcd_density=$DENSITY"; fi
+  if [ -n "$DEVICE_MODEL" ]; then
+    echo "ro.product.model=$DEVICE_MODEL"
+    echo "ro.product.vendor.model=$DEVICE_MODEL"
+    echo "ro.product.marketname=$DEVICE_MODEL"
+    echo "ro.product.vendor.marketname=$DEVICE_MODEL"
+  fi
 } > /tmp/vendor.build.prop && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop \
   && log "hook: vendor build.prop: protected_vm.supported hidden, sRGB-only display, lcd_density=${DENSITY:-stock}, software GPU props=${GPU_SW:-0}"
 # Only one Trusty VM may own CID 200: drop the plain launcher's auto-start so the on-demand
