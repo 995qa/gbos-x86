@@ -120,11 +120,19 @@ gbos_hw_report() {
   log "hwdetect: report written (hwdetect.txt)"
 }
 
+# XE_PARAMS in gbos.cfg = module parameters for the xe graphics driver (e.g. "enable_psr=0 enable_fbc=0"), loaded before the coldplug
+# so xe does not come up with its defaults. Unknown parameters are only warned about.
+gbos_xe_params() {
+  [ -n "$XE_PARAMS" ] || return 0
+  log "hwdetect: loading xe with: $XE_PARAMS"
+  modprobe -q xe $XE_PARAMS && log "hwdetect: xe loaded with parameters" || log "hwdetect: xe load with parameters FAILED"
+}
+
 # Whole thing; $1 = seconds to wait for devices (default 15).
 gbos_hwdetect() {
   [ -f $G/gbos.cfg ] && [ "$HWDETECT" = 0 ] && { log "hwdetect: disabled (HWDETECT=0)"; return 0; }
   [ -d $G/firmware ] && echo -n $G/firmware > $GBOS_FWPATH
-  gbos_modules_mount && gbos_coldplug && gbos_wait_devices ${1:-15}
+  gbos_modules_mount && { gbos_xe_params; gbos_coldplug && gbos_wait_devices ${1:-15}; }
   # The brightness keys/backlight need acpi_video when the panel has no native backlight.
   [ -d /sys/class/backlight ] && [ -z "$(ls /sys/class/backlight 2>/dev/null)" ] && modprobe -q video 2>/dev/null
   gbos_hw_report

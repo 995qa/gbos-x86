@@ -21,6 +21,9 @@ FWP=/sys/module/firmware_class/parameters/path
 if [ "$HWDETECT" != 0 ] && [ -f $G/hwdetect.sh ] && [ -d $G/modules/lib/modules ]; then
   . $G/hwdetect.sh
   gbos_hwdetect 15
+  # zram (Android's mmd_setup aborts without it, see "zram setup failed" in crash.txt) must be loadable: when it is not in the
+  # initramfs the early modprobe above fails, and the module tree from the stick is mounted only now.
+  grep -q '^zram ' /proc/modules || { modprobe zram && log "hook: zram loaded (after hwdetect)" || log "hook: modprobe zram FAILED (after hwdetect)"; }
   # Late firmware requests (after switch_root) see the stick as /postinstall.
   echo -n /postinstall/gbos/firmware > $FWP
 else
