@@ -88,6 +88,9 @@ gbos_hw_report() {
     echo "== net";   ls /sys/class/net
     echo "== bluetooth"; ls /sys/class/bluetooth 2>&1
     echo "== backlight"; for b in /sys/class/backlight/*; do [ -e $b ] && echo "$b max=$(cat $b/max_brightness) cur=$(cat $b/brightness)"; done
+    # DRM cards and the driver bound to each, then the driver's own dmesg (amdgpu: ip blocks, firmware, ring tests, "[drm] Display Core").
+    echo "== gpu (drm card: driver)"; for c in /sys/class/drm/card[0-9]*; do case ${c##*/} in card*-*) continue;; esac; [ -e $c ] && echo "${c##*/}: $(readlink $c/device/driver 2>/dev/null | sed 's#.*/##') $(cat $c/device/vendor $c/device/device 2>/dev/null | tr '\n' ' ')"; done
+    echo "== gpu dmesg"; dmesg | grep -iE 'amdgpu|\[drm|drm:|i915|simpledrm|xe 0000|\*ERROR\*' | head -n 100
     echo "== sound"; cat /proc/asound/cards 2>&1
     # Codec id + PCI subsystem id are what an HDA speaker/mic quirk is keyed on; the dmesg lines say why a card is missing
     # (no machine driver, DSP firmware or topology not found, codec probe errors).

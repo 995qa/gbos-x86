@@ -319,7 +319,7 @@ def hardware(req):
 <div class="notice"><strong>Be realistic:</strong> only the <b>Dell Latitude 5300</b> (i5-8365U, UHD 620) has been booted. Everything else is built in but unproven. Reports from your laptop make this table real: <a href="/forum/c/hardware">post yours</a>.</div>
 <table class="spec"><thead><tr><th>Area</th><th>Supported</th></tr></thead><tbody>
 <tr><td>CPU</td><td>Intel Core, 6th gen and newer, with AVX (check <code>grep avx /proc/cpuinfo</code> on any Linux; many Celeron/Pentium/Atom chips lack it and boot stops with a message). Missing instructions (SHA-NI, AVX-VNNI, GFNI, VAES, VPCLMULQDQ, AVX-IFMA) are emulated in the kernel; the hottest code is pre-patched. Faster on newer CPUs that have them natively.</td></tr>
-<tr><td>Graphics, display</td><td>Intel i915 from Skylake to Raptor Lake, eDP panels, HDMI/DP. Newer chips use xe (untested). Colour fixes apply to i915 only.</td></tr>
+<tr><td>Graphics, display</td><td>Intel i915 from Skylake to Raptor Lake, eDP panels, HDMI/DP. Newer chips use xe (untested). Colour fixes apply to i915 only. AMD Radeon: experimental, drawn by the CPU (software rendering), slow, untested on hardware.</td></tr>
 <tr><td>Brightness</td><td>Backlight class and ACPI video, plus laptop hotkey drivers (Dell, HP, ThinkPad, IdeaPad, Asus, Acer, Samsung, MSI, Sony, Fujitsu, LG, Intel HID).</td></tr>
 <tr><td>Wi-Fi</td><td>Intel 7260/7265, 8265, 9000-series, AX200/201/210/211, BE200 (iwldvm and iwlmvm). Realtek rtw88 and rtw89. MediaTek mt7921/22/25. Qualcomm ath10k and ath11k. Broadcom brcmfmac.</td></tr>
 <tr><td>Bluetooth</td><td>USB Bluetooth from Intel, Realtek, MediaTek, Qualcomm and Broadcom, plus Intel PCIe Bluetooth.</td></tr>
@@ -328,7 +328,7 @@ def hardware(req):
 <tr><td>Storage</td><td><strong>Installing needs an internal NVMe SSD</strong> (the installer only targets NVMe). SATA-only laptops can still run live from USB. SD card readers (Realtek, SDHCI) are supported.</td></tr>
 <tr><td>Other</td><td>USB webcams (UVC), Ethernet (r8169, e1000e, igc, common USB adapters).</td></tr></tbody></table>
 <h2>Not supported</h2>
-<p>Suspend and resume, fingerprint readers, IPU6 MIPI cameras, NVIDIA and AMD discrete GPUs, AMD CPUs, ARM. Some security-chip features (Google GSC, Trusty) do not exist on other laptops, so they are replaced in software.</p>
+<p>Suspend and resume, fingerprint readers, IPU6 MIPI cameras, NVIDIA and AMD discrete GPUs, AMD CPUs, ARM (AMD integrated graphics is experimental, see above). Some security-chip features (Google GSC, Trusty) do not exist on other laptops, so they are replaced in software.</p>
 <h2>The ideal laptop</h2>
 <p>A 2018 to 2022 business laptop: <strong>Intel 8th to 11th gen, Intel UHD or Iris Xe graphics, 8 GB or more of RAM, NVMe SSD, 1080p panel, Intel Wi-Fi and Bluetooth, Intel HDA audio</strong>. Dell Latitude, Lenovo ThinkPad and HP EliteBook of that period are the most predictable.</p>
 <h2>Reporting your laptop</h2>
@@ -358,7 +358,7 @@ def faq(req):
           ('Does Wi-Fi / Bluetooth / sound work?', 'On the Dell Latitude 5300, yes. On other laptops the right drivers are detected at boot, but this is untested. Send us your <code>hwdetect.txt</code>.'),
           ('Does suspend work?', 'Not yet.'),
           ('Why can I not download the image?', 'It contains Google\'s OS and patched Google libraries. See <a href="/download">Get gbOS86</a>.'),
-          ('Does it work on AMD or ARM?', 'No. Intel x86 only.'),
+          ('Does it work on AMD or ARM?', 'Not supported. Intel x86 only. AMD Radeon graphics has an experimental software-rendering mode (slow, untested on hardware); AMD CPUs and ARM are not supported.'),
           ('How do I update?', 'Boot a newer stick, choose 2 (install or update), then Update. Your data is kept.'), ('Can I install on a SATA SSD?', 'Not yet. The installer only targets an internal NVMe drive. You can still run live from the USB stick.')]
     return '<div class="doc"><h1>FAQ</h1>' + ''.join('<details class="card"><summary>%s</summary><p>%s</p></details>' % (q, a) for q, a in qa) + '''
 <h2 id="rules">Forum rules</h2><ol><li>Be respectful. No harassment or abuse.</li><li>Attach logs and details when asking for help.</li><li>No spam, ads or off-topic promotion.</li><li>Staff may edit or remove posts and ban accounts that break these rules.</li></ol></div>'''

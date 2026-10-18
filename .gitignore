@@ -57,3 +57,6 @@ __pycache__/
 
 # one-command build downloads
 /build/
+
+# SwiftShader Vulkan HAL for AMD GPUs (24 MB): fetched by build.sh from the GitHub release (tools/swiftshader-android builds it)
+/usb/patched/vulkan.swiftshader.so

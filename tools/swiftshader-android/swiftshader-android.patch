@@ -1,0 +1,59 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 0ef4a68..c549512 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -33,7 +33,9 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+     set(LINUX TRUE)
+ elseif(CMAKE_SYSTEM_NAME MATCHES "Android")
+     set(ANDROID TRUE)
+-    set(CMAKE_CXX_FLAGS "-DANDROID_NDK_BUILD")
++    set(LINUX TRUE)  # gbOS86: Android (NDK) build uses the Linux code paths plus the Android glue below
++    add_compile_definitions(VK_USE_PLATFORM_ANDROID_KHR SWIFTSHADER_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER
++        HAVE_GRALLOC1 ANDROID_PLATFORM_SDK_VERSION=10000 "LOG_TAG=\"swiftshader\"")
+ elseif(WIN32)
+ elseif(APPLE)
+ elseif(FUCHSIA)
+     if(MSVC)
+     else()
+     endif()
+ endif()
+ 
+diff --git a/src/Vulkan/CMakeLists.txt b/src/Vulkan/CMakeLists.txt
+index bd05b0f..a4567de 100644
+--- a/src/Vulkan/CMakeLists.txt
++++ b/src/Vulkan/CMakeLists.txt
+@@ -154,10 +154,21 @@ if(FUCHSIA)
+     list(APPEND VULKAN_LINKER_FLAGS "-static-libstdc++")
+ endif()
+ 
++if(ANDROID)  # gbOS86: Android (NDK) build, mirrors src/Android.bp's android target
++    list(APPEND VULKAN_SRC_FILES VkDeviceMemoryExternalAndroid.cpp VkDeviceMemoryExternalAndroid.hpp)
++endif()
++
+ add_library(vk_swiftshader SHARED
+     ${VULKAN_SRC_FILES}
+ )
+ 
++if(ANDROID)
++    target_compile_definitions(vk_swiftshader PRIVATE
++        VK_USE_PLATFORM_ANDROID_KHR SWIFTSHADER_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER
++        HAVE_GRALLOC1 ANDROID_PLATFORM_SDK_VERSION=10000 "LOG_TAG=\"swiftshader\"")
++    target_link_libraries(vk_swiftshader PRIVATE log nativewindow sync hardware cutils)
++endif()
++
+ set_target_properties(vk_swiftshader PROPERTIES
+     POSITION_INDEPENDENT_CODE 1
+     FOLDER "SwiftShader VK"
+@@ -201,7 +212,11 @@ target_link_libraries(vk_swiftshader
+         $<$<BOOL:${SWIFTSHADER_ENABLE_VULKAN_DEBUGGER}>:cppdap>
+ )
+ 
+-set_shared_library_export_map(vk_swiftshader ${CMAKE_CURRENT_SOURCE_DIR})
++if(ANDROID)  # gbOS86: the Android export map (HAL_MODULE_INFO_SYM + the Vulkan entry points, no WSI)
++    target_link_options(vk_swiftshader PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/android_vk_swiftshader.lds")
++else()
++    set_shared_library_export_map(vk_swiftshader ${CMAKE_CURRENT_SOURCE_DIR})
++endif()
+ 
+ # The name of the application-facing library. Usually this would be the Vulkan Loader,
+ # which then loads the Installable Client Driver (ICD), see:

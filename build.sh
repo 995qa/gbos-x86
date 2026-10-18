@@ -11,7 +11,8 @@
 #   1. Google's OS: downloads Google's public Googlebook recovery image (7.7 GB) and extracts only the six partitions
 #      gbOS86 needs (about 8 GB, streamed, so the 19 GB disk image inside is never written to disk).
 #   2. busybox (Debian busybox-static, ~1 MB) via docker.
-#   3. Kernel modules (14 MB) and firmware (53 MB) built from this repo's sources, from the GitHub release.
+#   3. Kernel modules (14 MB), firmware (70 MB) and the SwiftShader software Vulkan driver (AMD GPUs; 6 MB) built from this
+#      repo's sources, from the GitHub release.
 #   4. Assembles the flashable image with tools/make_gbos86_image.sh (the kernel, patched libraries and installer
 #      tools are already in this repository).
 # Needs: macOS or Linux, docker (running), python3, curl, tar, xz, ~35 GB free disk.
@@ -69,6 +70,10 @@ REL=https://github.com/linuxkid473/gbos-x86/releases/download/v37
 MODS=gbos86-modules-6.18.21-gbos-whl-r3.tar.xz;            MODS_SHA=ce9c2457dc5f99c1d216aaebee242c8abfd748ad07a973b6b75675e5c7c2a31e
 REL_FW=https://github.com/linuxkid473/gbos-x86/releases/download/v35
 FW=gbos86-firmware-12dfe670-sof2026.09.2-r4.tar.xz;        FW_SHA=8ad4ce620194e6555fe747bff95eb75b74c3c8f198ff7e3d5280c02f37bb1463
+# SwiftShader as an Android Vulkan HAL (tools/swiftshader-android/build.sh): hook.sh binds it over Google's Intel Vulkan driver on
+# laptops without an Intel GPU (AMD). Release v38 (tag to be created); tar contains patched/vulkan.swiftshader.so.
+REL_SWR=https://github.com/linuxkid473/gbos-x86/releases/download/v38
+SWR=gbos86-swr-r1.tar.xz;                                  SWR_SHA=7faaa84e3453523ae80d3792983e13d88324e6ce66367a93260e53541147f66a
 GOOGLE=https://dl.google.com/device/recovery/lapis-user/16452207/recovery.zip
 PARTS="system_a vendor_a product_a system_ext_a system_dlkm_a vendor_dlkm_a"
 
@@ -76,6 +81,7 @@ say() { printf '\n== %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 have_mods() { ls usb/modules/lib/modules/*/kernel/drivers/hid/intel-thc-hid/intel-thc.ko >/dev/null 2>&1; }
+have_swr() { [ -f usb/patched/vulkan.swiftshader.so ]; }
 have_parts() { for p in $PARTS; do [ -s lapis/parts/$p.img ] || return 1; done; }
 fetch() { # url dest sha
   mkdir -p "$(dirname "$2")"
@@ -91,6 +97,7 @@ have_parts || NEED="$NEED\n  - Google's recovery image: $GOOGLE (7.7 GB, from dl
 [ -x kernel/out/busybox ] || NEED="$NEED\n  - busybox-static from Debian via docker (about 1 MB)"
 have_mods || NEED="$NEED\n  - $MODS (14 MB, from this project's GitHub release)"
 [ -f usb/firmware/rtl_nic/rtl8168h-2.fw ] || NEED="$NEED\n  - $FW (70 MB, from this project's GitHub release)"
+have_swr || NEED="$NEED\n  - $SWR (software GPU driver for AMD graphics, 6 MB, from this project's GitHub release)"
 if [ -z "$NEED" ]; then say "everything is already downloaded"; else
   printf 'This will download:%b\n' "$NEED"
 fi
@@ -115,6 +122,11 @@ else say "3/4 kernel modules: present"; fi
 if [ ! -f usb/firmware/rtl_nic/rtl8168h-2.fw ]; then
   fetch "$REL_FW/$FW" "build/dl/$FW" "$FW_SHA"; tar -xJf "build/dl/$FW" -C usb
 else say "    firmware: present"; fi
+if ! have_swr; then
+  # Only AMD laptops need it: a failed download is a warning, not the end of the build (Intel images are complete without it).
+  if ( fetch "$REL_SWR/$SWR" "build/dl/$SWR" "$SWR_SHA" ) && tar -xJf "build/dl/$SWR" -C usb; then :
+  else printf '\nWARNING: no software GPU driver in this image; it will not render on AMD graphics (Intel laptops are unaffected).\n'; fi
+else say "    software GPU driver (SwiftShader): present"; fi
 
 say "4/4 building the image ($BUILD_TYPE)"
 sh tools/make_gbos86_image.sh --type "$BUILD_TYPE" --data-size "$DATA_GB"

@@ -54,6 +54,83 @@ else
   fi
 fi
 
+# --- software rendering for GPUs Google's image has no driver for (AMD) -- gbos_gpu_* functions ---
+# Google's image renders through ANGLE -> Vulkan, and its only Vulkan driver is Intel's ANV (/vendor/lib64/hw/vulkan.intel.so);
+# buffers come from minigbm (gralloc, /vendor/lib64/libminigbm_gralloc.so), which has no amdgpu backend. On a laptop whose GPU
+# is not Intel's, "software GPU" mode swaps in (a) SwiftShader, a CPU Vulkan driver, over vulkan.intel.so (ro.hardware.vulkan=intel
+# keeps working, no prop change) and (b) a gralloc whose generic linear-buffer backend answers to DRM driver "amdgpu" and which
+# lets the CPU driver lock any buffer (tools/patch_gralloc_amdgpu.py; likewise libgbm.so, tools/patch_libgbm_amdgpu.py).
+# GPU_SOFTWARE in gbos.cfg: auto (default: only when no Intel GPU is present and another GPU driver is bound), 1 (force, even
+# on Intel), 0 (never). SYSFS= and NEWROOT= are only for tools/test_gpu_select.sh.
+GBOS_GRALLOC_SHA=d48536951fd0e9643e71a5c8843e90833ce3e212e182782185470e2fbbfad673
+GBOS_LIBGBM_SHA=64a0f2537a5917822cb3f538dc74229e7ccf4ca45a30265bb97f742678ba294e
+GBOS_VKINTEL_SHA=5c687450523ea9ed9e8d4d9cc98ef4fef6c8d592d46db4bf425ad571dc6f7c73
+# "cardN driver" per DRM card (connectors like card0-eDP-1 are skipped); driver "none" = no driver bound.
+gbos_gpu_cards() {
+  for c in ${SYSFS:-/sys}/class/drm/card*; do
+    [ -e "$c" ] || continue
+    case ${c##*/} in card*-*) continue;; esac
+    d=$(readlink $c/device/driver 2>/dev/null); d=${d##*/}
+    echo "${c##*/} ${d:-none}"
+  done
+}
+# A driver that really drives a GPU, as opposed to the firmware framebuffer (simpledrm) or the virtual test driver (vkms).
+gbos_gpu_real() { case "$1" in none|simpledrm|simple-framebuffer|efifb|vesafb|vkms) return 1;; esac; return 0; }
+# PCI display controllers (class 0x03xxxx) by vendor: "yes" when one is Intel's.
+gbos_gpu_intel_pci() {
+  for d in ${SYSFS:-/sys}/bus/pci/devices/*; do
+    [ -e "$d/class" ] || continue
+    case "$(cat $d/class)" in 0x03*) [ "$(cat $d/vendor)" = 0x8086 ] && return 0;; esac
+  done
+  return 1
+}
+# Sets GPU_SW=1 (software rendering wanted) or 0 and logs why. $1 = seconds to wait for a non-Intel driver to bind.
+gbos_gpu_decide() {
+  GPU_SW=0
+  case "${GPU_SOFTWARE:-auto}" in
+    0) log "hook: software rendering: off (GPU_SOFTWARE=0)"; return 0;;
+    1) GPU_SW=1; log "hook: software rendering: on (GPU_SOFTWARE=1, forced)"; return 0;;
+  esac
+  w=0; real=; intel=
+  while :; do
+    real=; intel=
+    for e in $(gbos_gpu_cards | tr ' ' ','); do
+      drv=${e#*,}
+      case "$drv" in i915|xe) intel=$drv;; *) gbos_gpu_real "$drv" && real="$real ${e%%,*}:$drv";; esac
+    done
+    # Intel (bound, or at least present on the PCI bus): leave everything as it is, whatever else is installed.
+    [ -n "$intel" ] && { log "hook: software rendering: off (auto; Intel GPU driver $intel bound)"; return 0; }
+    gbos_gpu_intel_pci && { log "hook: software rendering: off (auto; Intel display controller present)"; return 0; }
+    [ -n "$real" ] && break
+    [ $w -ge ${1:-0} ] && break
+    sleep 1; w=$((w+1))
+  done
+  if [ -n "$real" ]; then
+    GPU_SW=1; log "hook: software rendering: on (auto; no Intel GPU, DRM:$real, after ${w}s)"
+  else
+    log "hook: software rendering: off (auto; no DRM GPU driver bound after ${w}s; cards: $(gbos_gpu_cards | tr '\n' ';'))"
+  fi
+}
+# Bind patched/$2 over $3 when it exists and $3 is the exact original ($4 = its sha256). $1 = what it is, for the log.
+gbos_gpu_bind() {
+  if [ ! -f "$G/patched/$2" ]; then log "hook: software rendering: gbos/patched/$2 missing ($1 not replaced; stick too old?)"; return 1; fi
+  if [ "$(sha256sum "$3" | cut -d' ' -f1)" != "$4" ]; then log "hook: software rendering: $1 NOT replaced (unexpected original, new Google build?)"; return 1; fi
+  mount --bind "$G/patched/$2" "$3" && log "hook: software rendering: $1 replaced" || { log "hook: software rendering: $1 bind FAILED"; return 1; }
+}
+# (a) gralloc: minigbm gets a backend for DRM driver "amdgpu" (linear dumb buffers); libgbm (camera/codec HALs) likewise.
+# (b) SwiftShader over the Intel Vulkan driver. Without (a) or (b) nothing can draw, so any failure there cancels the prop changes.
+gbos_gpu_enable() {
+  V=${NEWROOT:-/new}/vendor
+  gbos_gpu_bind "gralloc (libminigbm_gralloc, amdgpu backend)" libminigbm_gralloc.amdgpu.so $V/lib64/libminigbm_gralloc.so $GBOS_GRALLOC_SHA || GPU_SW=0
+  gbos_gpu_bind "libgbm (amdgpu backend)" libgbm.amdgpu.so $V/lib64/libgbm.so $GBOS_LIBGBM_SHA
+  gbos_gpu_bind "Vulkan driver (SwiftShader, CPU)" vulkan.swiftshader.so $V/lib64/hw/vulkan.intel.so $GBOS_VKINTEL_SHA || GPU_SW=0
+}
+# --- end software rendering ---
+
+# Let the DRM driver (amdgpu probes for several seconds and loads ~20 firmware files) finish before deciding.
+gbos_gpu_decide ${GPU_WAIT:-25}
+[ "$GPU_SW" = 1 ] && gbos_gpu_enable
+
 # drm.debug=0x04 (KMS only; not ATOMIC, which logs every frame): i915 dumps gamma/CSC mode and range per modeset while
 # drm_hwcomposer first sets up the panel. gbos.rc turns it off at boot_completed. Washed-out colours.
 echo 0x04 > /sys/module/drm/parameters/debug 2>/dev/null && log "hook: drm.debug=0x04 (KMS) until boot_completed"
@@ -248,13 +325,20 @@ fi
 # kernel side is fixed in i915_edp_colorspace.sh). Declare it sRGB-only.
 case "$DENSITY" in ''|*[!0-9]*) DENSITY=;; esac
 DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_color_display=|^ro.surface_flinger.has_HDR_display='
+[ "$GPU_SW" = 1 ] && DROP="$DROP|^ro.surface_flinger.supports_background_blur=|^ro.vendor.hwc.use_overlay_planes="   # blur on the CPU is far too slow
 [ -n "$DENSITY" ] && DROP="$DROP|^ro.sf.lcd_density="
 { grep -v -E "$DROP" /new/vendor/build.prop
   echo "ro.surface_flinger.has_wide_color_display=false"
   echo "ro.surface_flinger.has_HDR_display=false"
+  if [ "$GPU_SW" = 1 ]; then
+    echo "ro.surface_flinger.supports_background_blur=0"
+    # drm_hwcomposer picks its backend by DRM driver: i915/xe get "client" (everything composited by SurfaceFlinger), any other
+    # driver "generic", which also tries overlay planes. Unknown driver, so stay on the primary plane like Intel does.
+    echo "ro.vendor.hwc.use_overlay_planes=false"
+  fi
   if [ -n "$DENSITY" ]; then echo "ro.sf.lcd_density=$DENSITY"; fi
 } > /tmp/vendor.build.prop && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop \
-  && log "hook: vendor build.prop: protected_vm.supported hidden, sRGB-only display, lcd_density=${DENSITY:-stock}"
+  && log "hook: vendor build.prop: protected_vm.supported hidden, sRGB-only display, lcd_density=${DENSITY:-stock}, software GPU props=${GPU_SW:-0}"
 # Only one Trusty VM may own CID 200: drop the plain launcher's auto-start so the on-demand
 # (accessor-registering) launcher runs it, falling back to non-protected by itself.
 R=/new/system_ext/etc/init/desktop-trusty_security_vm_launcher.rc
