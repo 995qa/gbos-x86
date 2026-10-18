@@ -43,6 +43,8 @@ g() { grep "$@" $W/all.txt || true; }
   g -E '^ath10k/(QCA6174|QCA9377|QCA9984|QCA9887|QCA988X)/'
   g -E '^(rtw88|rtl_bt|rtl_nic|qca|brcm|cypress|cirrus|xe)/'
   g -E '^intel/ish/'
+  # Realtek RT1320 SoundWire amplifier (Surface Laptop 7): MCU patch code requested at probe, no MODULE_FIRMWARE entry
+  g -E '^realtek/rt1320/'
   g -E '^rtw89/'
   # Intel sensor hub (ISH): the BIOS can also load it, the files in intel/ish/ are for boards that need the OS to.
   # Everything the shipped kernel modules ask for (MODULE_FIRMWARE read from the .ko files): amdgpu, r8169/r8152, btmtk, mt76, ...
