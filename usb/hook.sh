@@ -21,6 +21,9 @@ FWP=/sys/module/firmware_class/parameters/path
 if [ "$HWDETECT" != 0 ] && [ -f $G/hwdetect.sh ] && [ -d $G/modules/lib/modules ]; then
   . $G/hwdetect.sh
   gbos_hwdetect 15
+  # zram (Android's mmd_setup aborts without it, see "zram setup failed" in crash.txt) must be loadable: when it is not in the
+  # initramfs the early modprobe above fails, and the module tree from the stick is mounted only now.
+  grep -q '^zram ' /proc/modules || { modprobe zram && log "hook: zram loaded (after hwdetect)" || log "hook: modprobe zram FAILED (after hwdetect)"; }
   # Late firmware requests (after switch_root) see the stick as /postinstall.
   echo -n /postinstall/gbos/firmware > $FWP
 else
@@ -181,7 +184,7 @@ service gbos_sync /system/bin/sh -c "while true; do sleep 5; sync; done"
     seclabel u:r:shell:s0
 
 # Sound diagnostics, 60 s after boot: ALSA cards/PCMs/codec (incl. control names) and audioserver state.
-service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; ( head -n 3000 cards pcm devices card0/id card0/codec*; ls -l /dev/snd; grep '^N: Name' /proc/bus/input/devices; dumpsys media.audio_flinger; dumpsys media.audio_policy ) > /postinstall/gbos/logs/boot-$N/audio.txt 2>&1"
+service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; ( head -n 3000 cards pcm devices card0/id card0/codec*; ls -l /dev/snd; grep '^N: Name' /proc/bus/input/devices; dumpsys media.audio_flinger; dumpsys media.audio_policy ) > /postinstall/gbos/logs/boot-$N/audio.txt 2>&1; sh /postinstall/gbos/audio/mixdiag.sh $N"
     user root
     group root audio
     seclabel u:r:shell:s0
@@ -190,6 +193,8 @@ on property:sys.boot_completed=1
     # KMS debug was on during the HWC's first modesets (set early in hook.sh); turn it off again.
     write /sys/module/drm/parameters/debug 0
     start gbos_audiodiag
+    start gbos_devname
+    start gbos_iptsd
     start gbos_wmsize
     start gbos_displaydiag
     start gbos_aidiag
@@ -246,6 +251,23 @@ service gbos_displaydiag /system/bin/sh -c "sleep 70; ( mount -t debugfs debugfs
     group root graphics
     seclabel u:r:shell:s0
     oneshot
+
+# Touchpad gestures on the Surface Laptop 7: iptsd (a fork) turns the touchpad's raw frames into a multitouch uinput device.
+# The script exits at once without surface/iptsd on the stick and when the machine has no such touchpad; oneshot so init does not restart it.
+service gbos_iptsd /system/bin/sh /postinstall/gbos/surface/iptsd-run.sh $N
+    user root
+    group root input
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
+
+# "Device name" in Settings (Settings.Global.device_name): kept in step with DEVICE_MODEL from gbos.cfg.
+service gbos_devname /system/bin/sh -c "sleep 15; [ -n '$DEVICE_MODEL' ] && settings put global device_name '$DEVICE_MODEL'"
+    user root
+    group root
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
 
 # Software Gatekeeper (gatekeeper/soft_gk.c) in place of the Trusty one, which never answers.
 service gbos_soft_gk /postinstall/gbos/soft_gk
@@ -327,6 +349,7 @@ case "$DENSITY" in ''|*[!0-9]*) DENSITY=;; esac
 DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_color_display=|^ro.surface_flinger.has_HDR_display='
 [ "$GPU_SW" = 1 ] && DROP="$DROP|^ro.surface_flinger.supports_background_blur=|^ro.vendor.hwc.use_overlay_planes="   # blur on the CPU is far too slow
 [ -n "$DENSITY" ] && DROP="$DROP|^ro.sf.lcd_density="
+[ -n "$DEVICE_MODEL" ] && DROP="$DROP|^ro.product.model=|^ro.product.vendor.model=|^ro.product.marketname=|^ro.product.vendor.marketname="
 { grep -v -E "$DROP" /new/vendor/build.prop
   echo "ro.surface_flinger.has_wide_color_display=false"
   echo "ro.surface_flinger.has_HDR_display=false"
@@ -337,6 +360,12 @@ DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_c
     echo "ro.vendor.hwc.use_overlay_planes=false"
   fi
   if [ -n "$DENSITY" ]; then echo "ro.sf.lcd_density=$DENSITY"; fi
+  if [ -n "$DEVICE_MODEL" ]; then
+    echo "ro.product.model=$DEVICE_MODEL"
+    echo "ro.product.vendor.model=$DEVICE_MODEL"
+    echo "ro.product.marketname=$DEVICE_MODEL"
+    echo "ro.product.vendor.marketname=$DEVICE_MODEL"
+  fi
 } > /tmp/vendor.build.prop && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop \
   && log "hook: vendor build.prop: protected_vm.supported hidden, sRGB-only display, lcd_density=${DENSITY:-stock}, software GPU props=${GPU_SW:-0}"
 # Only one Trusty VM may own CID 200: drop the plain launcher's auto-start so the on-demand
@@ -417,13 +446,22 @@ if [ -f $G/audio/gbos-hda-pch/audio_config.xml ]; then
       sed -i "s/HDA Intel PCH/$CNAME/g; s/PCH/$CID/g" /tmp/gbos-audio/$AC/*.xml
       sed "s/<soundcard>PCH/<soundcard>$CID/; s#gbos-hda-pch#$AC#" $G/audio/audio_default.xml > /tmp/gbos-audio/audio_default.xml
     fi
+    # Machine-specific mixer routes: the HDA template's controls do not exist on SoundWire cards. Keyed by DMI as well as the card id,
+    # because other SoundWire laptops also have the card id sofsoundwire.
+    if [ "$CID" = sofsoundwire ] && [ -f $G/audio/mixer_paths_surface_laptop_7.xml ] \
+       && grep -qi 'Surface Laptop.*7th Edition' /sys/class/dmi/id/product_name 2>/dev/null; then
+      cp $G/audio/mixer_paths_surface_laptop_7.xml /tmp/gbos-audio/$AC/mixer_paths.xml \
+        && log "hook: audio mixer_paths for the Surface Laptop 7 (RT1320/RT721) installed"
+    fi
+    # ASRC lives in /tmp of the initramfs, which switch_root deletes: a bind mount of it is empty in Android (dras: "Failed to read
+    # /vendor/etc/audio/gbos-gen/audio_config.xml"), so the files are copied into the tmpfs over /vendor/etc/audio below.
     ASRC=/tmp/gbos-audio/$AC; ADEF=/tmp/gbos-audio/audio_default.xml
   else
     ASRC=$G/audio/gbos-hda-pch; ADEF=$G/audio/audio_default.xml
   fi
   mkdir -p /tmp/vaudio && mount --bind $A /tmp/vaudio && mount -t tmpfs -o mode=0755 tmpfs $A \
     && for f in /tmp/vaudio/*; do n=${f##*/}; { [ -d $f ] && mkdir -p $A/$n || touch $A/$n; } && mount --bind $f $A/$n; done \
-    && mkdir -p $A/$AC && mount --bind $ASRC $A/$AC \
+    && mkdir -p $A/$AC && cp -r $ASRC/. $A/$AC/ \
     && mount --bind $ADEF /new/vendor/etc/data/hal_configs/audio_default.xml \
     && log "hook: audio config $AC (card id ${CID:-none}, name ${CNAME:-none}) active"
 fi

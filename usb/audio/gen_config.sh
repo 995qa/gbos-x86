@@ -33,7 +33,7 @@ sed "s/<soundcard>PCH/<soundcard>$CID_E/; s#gbos-hda-pch#$AC#" "$DEFX" > "$OUT/a
 
 # --- PCM layout of this card -------------------------------------------------------------------------------------------
 CARDNO=$(sed -n "s/^ *\([0-9][0-9]*\) \[$CID_E *\].*/\1/p" "$ASOUND/cards" 2>/dev/null | head -n 1)
-APB=; ACP=; DMIC=; DMIC16=; HDMI=
+APB=; SPK=; ACP=; DMIC=; DMIC16=; HDMI=
 if [ -n "$CARDNO" ] && [ -f "$ASOUND/pcm" ]; then
   eval "$(awk -v card="$CARDNO" '
     function lc(s) { return tolower(s) }
@@ -43,13 +43,14 @@ if [ -n "$CARDNO" ] && [ -f "$ASOUND/pcm" ]; then
       line = $0; sub(/^[0-9]+-[0-9]+: */, "", line)
       n = split(line, f, " : "); low = lc(f[1] " " f[2])
       pb = (line ~ / : playback [1-9]/); cp = (line ~ / : capture [1-9]/)
-      if (low ~ /deep buffer|echo|loopback|bluetooth|offload|reference|(^| )(sco|hfp|a2dp)( |$)/) next
+      if (low ~ /deep ?buffer|echo|loopback|bluetooth|offload|reference|(^| )(sco|hfp|a2dp)( |$)/) next
       if (pb && low ~ /hdmi|displayport|idisp/) { hdmi = hdmi " " dev; next }
       if (cp && !pb && low ~ /dmic/) { if (low ~ /16 *khz|16k/) { if (d16 == "") d16 = dev } else if (dm == "") dm = dev; next }
+      if (pb && sp == "" && low ~ /(^| )speaker/) { sp = dev; next }   # SoundWire: the speaker amp has its own PCM
       if (pb && apb == "") apb = dev
       if (cp && acp == "") acp = dev
     }
-    END { printf "APB=%s; ACP=%s; DMIC=%s; DMIC16=%s; HDMI=\"%s\"\n", apb, acp, dm, d16, hdmi }
+    END { printf "APB=%s; SPK=%s; ACP=%s; DMIC=%s; DMIC16=%s; HDMI=\"%s\"\n", apb, sp, acp, dm, d16, hdmi }
   ' "$ASOUND/pcm")"
 fi
 [ -n "$DMIC" ] || DMIC=$DMIC16
@@ -68,7 +69,7 @@ fi
 
 # --- rewrite audio_config.xml ------------------------------------------------------------------------------------------
 if [ -n "$APB" ]; then
-  awk -v cid="$CID" -v cn="$CNAME" -v apb="$APB" -v acp="$ACP" -v imic="$IMIC" -v hpj="$HPJ" -v micj="$MICJ" \
+  awk -v cid="$CID" -v cn="$CNAME" -v apb="$APB" -v spk="$SPK" -v acp="$ACP" -v imic="$IMIC" -v hpj="$HPJ" -v micj="$MICJ" \
       -v h1="$H1" -v h2="$H2" -v h3="$H3" '
     function setpcm(dev) { sub(/hw:[^<,]*,[0-9]*/, "hw:" cid "," dev) }
     function setjack(name) { sub(/>[^<]*</, ">" name "<") }
@@ -79,7 +80,8 @@ if [ -n "$APB" ]; then
       if (sec == "HDMI3" && h3 == "") drop = 1
     }
     sec != "" && /<PlaybackPCM>/ {
-      if (sec == "Speaker" || sec == "Headphone") setpcm(apb)
+      if (sec == "Headphone") setpcm(apb)
+      if (sec == "Speaker") setpcm(spk != "" ? spk : apb)
       if (sec == "HDMI1") setpcm(h1); if (sec == "HDMI2") setpcm(h2); if (sec == "HDMI3") setpcm(h3)
     }
     sec != "" && /<CapturePCM>/ {

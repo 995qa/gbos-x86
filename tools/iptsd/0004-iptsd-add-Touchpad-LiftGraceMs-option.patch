@@ -1,0 +1,125 @@
+diff --git a/src/apps/daemon/touch.hpp b/src/apps/daemon/touch.hpp
+index d890b31..a76da7b 100644
+--- a/src/apps/daemon/touch.hpp
++++ b/src/apps/daemon/touch.hpp
+@@ -20,6 +20,7 @@
+ #include <chrono>
+ #include <cmath>
+ #include <iterator>
++#include <map>
+ #include <memory>
+ #include <optional>
+ #include <set>
+@@ -82,6 +83,14 @@ private:
+ 	// Whether m_button_last_change holds a real timestamp yet.
+ 	bool m_button_initialized = false;
+ 
++	// Grace period before a disappeared contact is reported as lifted. Bridges
++	// single-frame detection dropouts ("blinking") that otherwise produce ghost
++	// taps (a blink during a two-finger scroll reads as a two-finger tap).
++	f64 m_lift_grace_ms = 0;
++
++	// When each active contact index was last actually detected.
++	std::map<usize, std::chrono::steady_clock::time_point> m_last_seen {};
++
+ 	// Whether all output is currently suppressed because a palm was registered.
+ 	// Tracked here (not just locally in update(contacts)) so that update(Button) can
+ 	// also respect it -- the raw button sample path is otherwise a separate channel
+@@ -128,6 +137,9 @@ public:
+ 
+ 		m_button_debounce_ms = config.touchpad_button_debounce_ms;
+ 
++		if (info.is_touchpad())
++			m_lift_grace_ms = config.touchpad_lift_grace_ms;
++
+ 		const f64 diag = std::hypot(config.width, config.height);
+ 
+ 		// Resolution for X / Y is expected to be units/mm.
+@@ -162,6 +174,9 @@ public:
+ 		// Find the inputs that need to be lifted
+ 		this->search_lifted(contacts);
+ 
++		// Hold recently-disappeared contacts for a short grace period.
++		this->apply_lift_grace();
++
+ 		m_blocked = this->is_blocked(contacts);
+ 
+ 		if (m_blocked)
+@@ -288,6 +303,40 @@ private:
+ 		                    std::inserter(m_lift, m_lift.begin()));
+ 	}
+ 
++	/*!
++	 * Keeps contacts that disappeared less than LiftGraceMs ago out of m_lift,
++	 * so that single-frame detection dropouts do not reach userspace as
++	 * touch-up/touch-down pairs. Held indices stay in m_current so the
++	 * BTN_TOOL_* finger count remains stable during the dropout.
++	 */
++	void apply_lift_grace()
++	{
++		const auto now = std::chrono::steady_clock::now();
++
++		for (const usize &index : m_current)
++			m_last_seen[index] = now;
++
++		if (m_lift_grace_ms <= 0)
++			return;
++
++		for (auto it = m_lift.begin(); it != m_lift.end();) {
++			const auto seen = m_last_seen.find(*it);
++			const f64 elapsed =
++				seen == m_last_seen.cend()
++					? m_lift_grace_ms
++					: std::chrono::duration<f64, std::milli>(now - seen->second)
++						  .count();
++
++			if (elapsed < m_lift_grace_ms) {
++				m_current.insert(*it);
++				it = m_lift.erase(it);
++			} else {
++				m_last_seen.erase(*it);
++				++it;
++			}
++		}
++	}
++
+ 	/*!
+ 	 * Checks if the touch device should be disabled because of a palm.
+ 	 *
+@@ -350,6 +399,12 @@ private:
+ 		for (const usize &index : m_lift)
+ 			this->lift_multitouch(index);
+ 
++		if (reset_singletouch && m_current.find(m_single_index) != m_current.cend()) {
++			// The singletouch contact is only being held by the lift grace
++			// period; keep its state instead of lifting it for one frame.
++			reset_singletouch = false;
++		}
++
+ 		if (reset_singletouch) {
+ 			this->lift_singletouch();
+ 
+diff --git a/src/core/generic/config.hpp b/src/core/generic/config.hpp
+index c14de83..93033b4 100644
+--- a/src/core/generic/config.hpp
++++ b/src/core/generic/config.hpp
+@@ -35,6 +35,7 @@ public:
+ 	bool touchpad_disable_on_palm = false;
+ 	f64 touchpad_overshoot = 0.5;
+ 	f64 touchpad_button_debounce_ms = 25;
++	f64 touchpad_lift_grace_ms = 0;
+ 
+ 	// [Contacts]
+ 	std::string contacts_neutral = "mode";
+diff --git a/src/core/linux/config-loader.hpp b/src/core/linux/config-loader.hpp
+index 2623a58..1e06ddd 100644
+--- a/src/core/linux/config-loader.hpp
++++ b/src/core/linux/config-loader.hpp
+@@ -161,6 +161,7 @@ private:
+ 		this->get(ini, "Touchpad", "DisableOnPalm", m_config.touchpad_disable_on_palm);
+ 		this->get(ini, "Touchpad", "Overshoot", m_config.touchpad_overshoot);
+ 		this->get(ini, "Touchpad", "ButtonDebounceMs", m_config.touchpad_button_debounce_ms);
++		this->get(ini, "Touchpad", "LiftGraceMs", m_config.touchpad_lift_grace_ms);
+ 
+ 		this->get(ini, "Contacts", "Neutral", m_config.contacts_neutral);
+ 		this->get(ini, "Contacts", "NeutralValue", m_config.contacts_neutral_value);

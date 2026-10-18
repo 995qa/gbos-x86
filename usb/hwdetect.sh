@@ -65,6 +65,14 @@ gbos_wait_devices() {
     # Done when every class that exists on this machine has shown up, or nothing is loading any more.
     if [ "$w" -gt 0 ] && [ "$b" -gt 0 ] && [ "$s" -gt 0 ]; then break; fi
     [ "$w" -eq 0 ] && grep -q '^iwlwifi ' /proc/modules && gbos_load_opmodes
+    # Peripherals created by the drivers loaded above (SoundWire codecs, Surface Aggregator children) appear after the first
+    # coldplug: another pass every 2 s while waiting.
+    [ $((i % 2)) -eq 1 ] && gbos_coldplug_pass
+    # SoundWire codecs (Surface Laptop 7: RT1320 amp, RT721 jack codec) were not autoloaded by the coldplug here (root cause not
+    # found, modalias present); ask for them by name once the SoundWire machine driver is in. Harmless without the chips.
+    if grep -q '^snd_soc_sof_sdw ' /proc/modules && ! grep -q '^snd_soc_rt721_sdca ' /proc/modules; then
+      modprobe -a -q snd-soc-rt1320-sdw snd-soc-rt721-sdca 2>/dev/null && log "hwdetect: SoundWire codec modules requested"
+    fi
     sleep 1; i=$((i+1))
   done
   log "hwdetect: devices after ${i}s: wifi=$(ls /sys/class/net 2>/dev/null | grep '^wl' | tr '\n' ' ') bt=$(ls /sys/class/bluetooth 2>/dev/null | tr '\n' ' ') sound=$(cat /proc/asound/cards 2>/dev/null | grep '\[' | tr -s ' ' | tr '\n' ';') backlight=$(ls /sys/class/backlight 2>/dev/null | tr '\n' ' ')"
@@ -103,6 +111,8 @@ gbos_hw_report() {
     echo "== sound speaker nodes"
     for c in /proc/asound/card*/codec#*; do [ -f "$c" ] && { echo "--- $c"; awk '/^Node 0x(02|03|14|17|21) /{print; p=1; next} /^Node /{p=0} p' "$c" | head -n 80; }; done
     echo "== sound dmesg"; dmesg | grep -iE 'sof|snd_|hdaudio|hda_|hdac|dmic|tplg|topology|skl_hda|dspcfg|audio' | head -n 80
+    echo "== soundwire"; for d in /sys/bus/soundwire/devices/*; do [ -e $d ] && echo "${d##*/} modalias=$(cat $d/modalias 2>/dev/null) driver=$(readlink $d/driver 2>/dev/null | sed 's#.*/##')"; done
+    echo "== soundwire dmesg"; dmesg | grep -iE 'sdw|soundwire|rt1320|rt721|sdca|asoc|tplg' | grep -v find_sdca_function | tail -n 60
     echo "== rfkill"; for r in /sys/class/rfkill/*; do [ -e $r ] && echo "$(cat $r/name) $(cat $r/type) soft=$(cat $r/soft) hard=$(cat $r/hard)"; done
     echo "== missing firmware"; dmesg | grep -iE 'firmware.*(failed|not found|-2\))|Direct firmware load.*failed|failed to load.*(ucode|\.bin|\.sfi)' | sort -u
     echo "== lsmod"; lsmod
@@ -110,11 +120,19 @@ gbos_hw_report() {
   log "hwdetect: report written (hwdetect.txt)"
 }
 
+# XE_PARAMS in gbos.cfg = module parameters for the xe graphics driver (e.g. "enable_psr=0 enable_fbc=0"), loaded before the coldplug
+# so xe does not come up with its defaults. Unknown parameters are only warned about.
+gbos_xe_params() {
+  [ -n "$XE_PARAMS" ] || return 0
+  log "hwdetect: loading xe with: $XE_PARAMS"
+  modprobe -q xe $XE_PARAMS && log "hwdetect: xe loaded with parameters" || log "hwdetect: xe load with parameters FAILED"
+}
+
 # Whole thing; $1 = seconds to wait for devices (default 15).
 gbos_hwdetect() {
   [ -f $G/gbos.cfg ] && [ "$HWDETECT" = 0 ] && { log "hwdetect: disabled (HWDETECT=0)"; return 0; }
   [ -d $G/firmware ] && echo -n $G/firmware > $GBOS_FWPATH
-  gbos_modules_mount && gbos_coldplug && gbos_wait_devices ${1:-15}
+  gbos_modules_mount && { gbos_xe_params; gbos_coldplug && gbos_wait_devices ${1:-15}; }
   # The brightness keys/backlight need acpi_video when the panel has no native backlight.
   [ -d /sys/class/backlight ] && [ -z "$(ls /sys/class/backlight 2>/dev/null)" ] && modprobe -q video 2>/dev/null
   gbos_hw_report
