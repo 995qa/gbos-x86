@@ -65,8 +65,8 @@ if [ -z "$BUILD_TYPE" ]; then
   fi
 fi
 
-REL=https://github.com/linuxkid473/gbos-x86/releases/download/v32
-MODS=gbos86-modules-6.18.21-gbos-whl.tar.xz;               MODS_SHA=876705e2f707bde12ef558b0759f2b3c62db287e8163183d767d5f53fa3ffdac
+REL=https://github.com/linuxkid473/gbos-x86/releases/download/v37
+MODS=gbos86-modules-6.18.21-gbos-whl-r3.tar.xz;            MODS_SHA=ce9c2457dc5f99c1d216aaebee242c8abfd748ad07a973b6b75675e5c7c2a31e
 REL_FW=https://github.com/linuxkid473/gbos-x86/releases/download/v35
 FW=gbos86-firmware-12dfe670-sof2026.09.2-r4.tar.xz;        FW_SHA=8ad4ce620194e6555fe747bff95eb75b74c3c8f198ff7e3d5280c02f37bb1463
 GOOGLE=https://dl.google.com/device/recovery/lapis-user/16452207/recovery.zip
@@ -75,6 +75,7 @@ PARTS="system_a vendor_a product_a system_ext_a system_dlkm_a vendor_dlkm_a"
 say() { printf '\n== %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
+have_mods() { ls usb/modules/lib/modules/*/kernel/drivers/hid/intel-thc-hid/intel-thc.ko >/dev/null 2>&1; }
 have_parts() { for p in $PARTS; do [ -s lapis/parts/$p.img ] || return 1; done; }
 fetch() { # url dest sha
   mkdir -p "$(dirname "$2")"
@@ -88,7 +89,7 @@ docker info >/dev/null 2>&1 || die "docker is installed but not running"
 NEED=""
 have_parts || NEED="$NEED\n  - Google's recovery image: $GOOGLE (7.7 GB, from dl.google.com)"
 [ -x kernel/out/busybox ] || NEED="$NEED\n  - busybox-static from Debian via docker (about 1 MB)"
-[ -d usb/modules/lib/modules ] || NEED="$NEED\n  - $MODS (14 MB, from this project's GitHub release)"
+have_mods || NEED="$NEED\n  - $MODS (14 MB, from this project's GitHub release)"
 [ -f usb/firmware/rtl_nic/rtl8168h-2.fw ] || NEED="$NEED\n  - $FW (70 MB, from this project's GitHub release)"
 if [ -z "$NEED" ]; then say "everything is already downloaded"; else
   printf 'This will download:%b\n' "$NEED"
@@ -107,7 +108,7 @@ else say "1/4 Google's OS image: already extracted"; fi
 
 if [ ! -x kernel/out/busybox ]; then say "2/4 busybox"; sh tools/fetch_busybox.sh; else say "2/4 busybox: present"; fi
 
-if [ ! -d usb/modules/lib/modules ]; then
+if ! have_mods; then
   say "3/4 kernel modules and firmware"
   fetch "$REL/$MODS" "build/dl/$MODS" "$MODS_SHA"; tar -xJf "build/dl/$MODS" -C usb
 else say "3/4 kernel modules: present"; fi

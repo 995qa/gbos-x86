@@ -77,6 +77,9 @@ _y('PINCTRL_INTEL', 'PINCTRL_SUNRISEPOINT', 'PINCTRL_ICELAKE', 'PINCTRL_TIGERLAK
 _m('INTEL_ISH_HID', 'INTEL_ISH_HOST', 'HID_RMI', 'RMI4_CORE', 'RMI4_I2C', 'RMI4_SMB', 'RMI4_F11', 'RMI4_F12', 'RMI4_F30',
    'MOUSE_PS2_SYNAPTICS', 'MOUSE_ELAN_I2C', 'MOUSE_SYNAPTICS_I2C', 'HID_SENSOR_HUB', 'I2C_I801', 'I2C_SMBUS',
    'HID_ALPS', 'HID_GOOGLE_HAMMER', 'INPUT_SPARSEKMAP')
+# Intel Touch Host Controller (Lunar Lake and newer laptops put keyboard/touchpad/touch behind it:
+# QuickI2C = HID-over-I2C, QuickSPI = HID-over-SPI; PCI 8086:a848/a84a and a849/a84b on Lunar Lake).
+_m('INTEL_THC_HID', 'INTEL_QUICKSPI', 'INTEL_QUICKI2C')
 # Laptop platform drivers (hotkeys, rfkill, fan/thermal, battery thresholds). The vendor menus gate the drivers.
 _y('X86_PLATFORM_DEVICES', 'X86_PLATFORM_DRIVERS_DELL', 'X86_PLATFORM_DRIVERS_HP', 'ACPI_VIDEO', 'RFKILL_INPUT')
 _m('INTEL_PMT_TELEMETRY', 'INTEL_PMT_CLASS')
