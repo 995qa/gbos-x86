@@ -283,7 +283,11 @@ Needs macOS or Linux with docker, python3, qemu (for tests) and ~30 GB free. The
    `i915_edp_colorspace.sh` (eDP always gets default colorimetry; BT.2020 made the panel pale) and
    `i915_edp_no_colorspace.sh` (no Colorspace property on eDP at all, from kernel #25) and
    `i915_edp_full_range.sh` (eDP always full-range RGB, from kernel #27) and `i915_ignore_gamma.sh`
-   (ignore userspace gamma/degamma/CTM: the HWC loads an xe LOG_GAMMA_LUT curve into GAMMA_LUT, kernel #29).
+   (ignore userspace gamma/degamma/CTM: the HWC loads an xe LOG_GAMMA_LUT curve into GAMMA_LUT, kernel #29), and
+   `kernel/isa_emu_patch/debug_selinux.sh` (the `gbos_permissive` parameter of the kernel command line: without it the
+   kernel is not permissive, Android's init enforces SELinux and the boot stops right after "init: Loading SELinux policy").
+   For the Surface Laptop 7 (Intel) also `kernel/isa_emu_patch/surface_sl7_sam.sh` and `python3 kernel/isa_emu_patch/sdw_sl7.py`
+   (see HANDOFF.md); both only touch modules.
 6. **Build:** `kernel/isa_emu_patch/build.sh` (in `gbos-kbuild`), then `make modules_install` into
    `usb/modroot`, then `usb/make_initramfs.py usb/modroot usb/stage0.cpio`, copy it to
    `/build/out/gbos_stage0.cpio`, and build again so it's embedded. `arch/x86/boot/bzImage` is
