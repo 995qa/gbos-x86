@@ -49,5 +49,5 @@ Read `README.md` (what/how) and `HANDOFF.md` (chronological log of every bug and
 - Shell syntax checks: `sh -n usb/hook.sh usb/install.sh usb/stage0_init.sh usb/apex_patch.sh`.
 
 ## Commits
-End messages with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Add a dated line to
+End messages with `Co-Authored-By: Example Model <noreply@example.com>` (replace example names with your model's name and provider url, example: "Big Pickle Free <noreply@opencode.ai>"). Add a dated line to
 `HANDOFF.md` for anything learned on hardware.
