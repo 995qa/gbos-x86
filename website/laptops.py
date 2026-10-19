@@ -83,6 +83,10 @@ LAPTOPS = [
          broken='Internal microphone, HDMI audio, camera, touchscreen, suspend and resume',
          notes='Needed several kernel and boot-script changes (Surface Aggregator, SoundWire audio, <code>XE_PARAMS</code> for the display); see the Surface Laptop 7 section of the README and HANDOFF.md. '
                'Before firmware v35 the screen stayed black (the <code>xe</code> GuC firmware was missing).'),
+    dict(name='ASUS X441NA', cpu='Celeron N3350 (Apollo Lake)', status='no',
+         works='',
+         broken='Kernel panic right after choosing live boot: "Attempted to kill init! exitcode=0x00000004"',
+         notes='This CPU has no AVX, and Google\'s init uses AVX from its first instructions (exit code 4 = illegal instruction). It cannot be fixed with drivers. Sticks built after the AVX check stop with a message instead of a panic. Same for many other Celeron, Pentium and Atom parts.'),
     dict(name='HP 14-ne0013dx', cpu='Intel (details not given)', status='no',
          works='',
          broken='Did not work for the reporter',

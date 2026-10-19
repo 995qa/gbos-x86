@@ -43,7 +43,7 @@ Boot the laptop from the stick (**F12** at the logo, Secure Boot off).
 
 `./build.sh --dry-run` shows what it would download (Google's 7.7 GB image, ~1 MB busybox, 14 MB of kernel modules and 70 MB of firmware
 from this repo's [release](https://github.com/linuxkid473/gbos-x86/releases)). It streams only the six partitions it needs out of
-Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download. Eighteen machines have been
+Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download. Nineteen machines have been
 tried (see [Tested laptops](#tested-laptops)); if you try another, please post its `gbos/logs/boot-N/hwdetect.txt` in an issue.
 Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind mounts of this repo's own folders automatically; don't disable SELinux.
 
@@ -70,7 +70,7 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 | Auth-bound keystore keys | `soft_gk`'s auth tokens aren't trusted by the software KeyMint |
 | Google's on-device AI (Magic Pointer, AICore) | Google's servers refuse it without hardware key attestation, which no non-Google laptop can provide |
 | OS updates | Built-in OTA can't work; moving to a new Google build is semi-automated: `tools/port_build.sh`, see [`porting.md`](porting.md) |
-| Other laptops | Seven of eighteen tried machines work fully, nine partly, one pending, one not; see [Tested laptops](#tested-laptops). The CPU-emulation kernel should help any pre-2021 Intel CPU |
+| Other laptops | Seven of nineteen tried machines work fully, nine partly, one pending, two not; see [Tested laptops](#tested-laptops). The CPU-emulation kernel should help any pre-2021 Intel CPU |
 
 ## How it works
 
@@ -156,6 +156,7 @@ Reports from people who booted the stick (2026-10-18). A row says what was repor
 | Dell XPS 16 (2026) | Intel Core Ultra | Partly | Boots and runs | Screen refresh rate, Wi-Fi, camera. A kernel option reportedly fixes the screen: try it with `MODOPTS` in `gbos.cfg` |
 | Framework Laptop 13 Pro | Core Ultra 5 325 (Panther Lake), 16 GB | Fix pending | Boots | Black screen on sticks without the Panther Lake `xe` firmware (GuC); firmware v35 has it. Awaiting confirmation |
 | Microsoft Surface Laptop 7 (Intel) | Core Ultra 7 266V (Lunar Lake), 16 GB | Partly | Wi-Fi, keyboard, battery, speakers, headset jack, touchpad, Bluetooth | Microphone, HDMI audio, camera, touchscreen, suspend. Needed extra kernel and boot-script work (section below) |
+| ASUS X441NA | Celeron N3350 | Does not work | | No AVX on this CPU: Google's init dies on its first instruction (kernel panic, exit code 4). Not fixable; newer sticks stop with a message |
 | HP 14-ne0013dx | Intel | Does not work | | No logs yet |
 
 Pattern: 2017 to 2022 business and mainstream laptops work with little setup (Wi-Fi, Bluetooth, touchpad, display, webcam). The common gap on 10th/11th-gen machines is **sound** (Inspiron 7391, Realme Book Slim), which on those uses the SOF driver; newer Core Ultra machines boot but hit missing firmware (`xe`)
@@ -185,7 +186,7 @@ The kernel (#31) builds drivers for most Intel-era laptops as **modules**, and b
 | Hotkeys, fans, rfkill | Dell, HP, ThinkPad, IdeaPad, Asus, Acer, Samsung, MSI, Sony, Fujitsu, LG, Intel HID/VBTN |
 | Other | SD card readers (Realtek, SDHCI), USB webcams (UVC), Ethernet (r8169, e1000e, igc, USB r8152 and friends) |
 
-**Honest limits.** Eighteen machines have been booted (below); anything not on that list is built and wired but untested on
+**Honest limits.** Nineteen machines have been booted (below); anything not on that list is built and wired but untested on
 hardware. Sound on SOF machines needs the codec's mixer controls to match the generated config (best effort);
 suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD discrete GPUs are not covered. Build the payload with
 `tools/fetch_firmware.sh` (firmware, not committed) and `kernel/isa_emu_patch/build_generic*.sh` (modules, not committed).
