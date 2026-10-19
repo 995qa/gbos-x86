@@ -459,6 +459,11 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
     the vermagic follow it, so **the module tree has to be replaced with the new one** (it is signed with the key
     of the build tree, so the old modules are rejected by the new kernel anyway). The build number continues at
     #38 (the `.version` file in the build directory).
+  - *One step left for a public release:* the module tree has to be published again (the new one is in
+    `usb/modules/`, built from this tree, but `usb/modules/` is not committed). The old release asset
+    (v37, "gbos86-modules-6.18.21-gbos-whl-r3.tar.xz") is signed with the old build's key, so the new kernel
+    rejects it: `build.sh` has to point at the new asset. `build.sh` does not fetch it when `usb/modules/`
+    already holds a tree, so a local build works as it is.
   - *Not verified on the laptop.* What to look for in `kmsg.log` / `stage0-dmesg.txt`: "welcome to KernelSU version 32680",
     "dispatcher installed at slot N", the app showing up in the manager, and `logs/boot-N/ksu.txt` (the install log).
     Whether `su` really works for a granted app is the real test.
