@@ -45,6 +45,14 @@ OVERRIDES = {
     'SND_HDA_CODEC_HDMI': 'y', 'SND_HDA_CODEC_HDMI_INTEL': 'y', 'SND_HDA_I915': 'y',
     # Bluetooth: the 9560's Bluetooth is USB (8087:0aaa); Google's kernel only has PCIe Bluetooth.
     'BT_HCIBTUSB': 'm', 'BT_HCIBTUSB_AUTOSUSPEND': 'y',
+    # KernelSU (tiann/KernelSU, GPL-2.0) built into the kernel: root for apps, driven by the
+    # official manager app. kernel/kernelsu/apply.sh puts the sources in drivers/kernelsu.
+    # KSU_X86_PATCH_SYSCALL_DISPATCHER: since 6.9 x86 dispatches syscalls through a switch
+    # statement (arch/x86/entry/syscall_64.c), so patching sys_call_table[] has no effect;
+    # with this option KernelSU patches the x64_sys_call dispatcher itself at runtime
+    # (upstream's mechanism, no kernel source patch needed).
+    'KSU': 'y',
+    'KSU_X86_PATCH_SYSCALL_DISPATCHER': 'y',
 }
 
 # Generic Intel gen6+ laptop support (kernel #31). Everything is a module, loaded at boot by modalias coldplug
@@ -132,7 +140,7 @@ _m('SND_SOC_SOF_PCI', 'SND_SOC_SOF_ACPI', 'SND_SOC_SOF_INTEL_COMMON', 'SND_SOC_S
    'SND_SOC_RT1015', 'SND_SOC_RT1015P', 'SND_SOC_TAS2562')
 
 # These must come out exactly as requested after olddefconfig.
-REQUIRED = ['DRM_I915', 'TRIM_UNUSED_KSYMS', 'MODULE_SIG_PROTECT', 'ANDROID_BINDER_IPC', 'BLK_DEV_NVME']
+REQUIRED = ['DRM_I915', 'TRIM_UNUSED_KSYMS', 'MODULE_SIG_PROTECT', 'ANDROID_BINDER_IPC', 'BLK_DEV_NVME', 'KSU']
 
 
 def parse(text):

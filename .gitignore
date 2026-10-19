@@ -66,3 +66,9 @@ __pycache__/
 /usb/patched/vulkan.swiftshader.so
 # RADV Android HAL (13 MB): built by tools/radv-android/build.sh, copied to usb/patched/ by hand
 /usb/patched/vulkan.radv.so
+
+
+# KernelSU's userspace (19 MB): fetched by build.sh from the KernelSU release on GitHub
+# (the kernel only accepts a manager APK with the official signing certificate)
+/usb/ksu/manager.apk
+/usb/ksu/ksud

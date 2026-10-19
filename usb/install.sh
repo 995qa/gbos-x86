@@ -64,7 +64,7 @@ mkdir -p /mnt/stickefi && mount -t vfat -o ro $EFIPART /mnt/stickefi 2>/dev/null
   || die "cannot mount the stick's EFI partition ($EFIPART)"
 KERNEL=/mnt/stickefi/EFI/BOOT/BOOTX64.EFI
 FILES="super.img super.layout hook.sh aidiag.sh early_patch.sh hwdetect.sh apex_patch.sh crossystem bootdisk.img libkm_compat.so system_ext_manifest.xml soft_gk"
-DIRS="firmware patched audio installer kmod modules surface"
+DIRS="firmware patched audio installer kmod modules surface ksu"
 for f in $FILES; do [ -f $G/$f ] || die "missing gbos/$f on the stick"; done
 for d in $DIRS; do [ -d $G/$d ] || die "missing gbos/$d/ on the stick"; done
 [ -f $KERNEL ] || die "missing EFI/BOOT/BOOTX64.EFI on the stick's EFI partition"

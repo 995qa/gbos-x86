@@ -70,6 +70,11 @@ REL=https://github.com/linuxkid473/gbos-x86/releases/download/v37
 MODS=gbos86-modules-6.18.21-gbos-whl-r3.tar.xz;            MODS_SHA=ce9c2457dc5f99c1d216aaebee242c8abfd748ad07a973b6b75675e5c7c2a31e
 REL_FW=https://github.com/linuxkid473/gbos-x86/releases/download/v35
 FW=gbos86-firmware-12dfe670-sof2026.09.2-r4.tar.xz;        FW_SHA=8ad4ce620194e6555fe747bff95eb75b74c3c8f198ff7e3d5280c02f37bb1463
+# KernelSU's userspace (the kernel part is built into the kernel, see kernel/kernelsu/): the manager app and the daemon.
+# The kernel only accepts a manager APK with the official signing certificate, so the release APK is used, not a Play Store copy.
+REL_KSU=https://github.com/tiann/KernelSU/releases/download/v3.3.1
+KSU_APK=KernelSU_v3.3.1_32680-release.apk;                  KSU_APK_SHA=b4a059ace71de2fa65cc7f12b1c58d55fc23ab25e057ee4230ce779742abe450
+KSUD=ksud-x86_64-linux-android;                             KSUD_SHA=5324a1e8f2f3c74dc69624c4cd973fb9bc1d5da3614a2f2e694583f73bd13cbd
 # SwiftShader as an Android Vulkan HAL (tools/swiftshader-android/build.sh): hook.sh binds it over Google's Intel Vulkan driver on
 # laptops without an Intel GPU (AMD). Release v38 (tag to be created); tar contains patched/vulkan.swiftshader.so.
 REL_SWR=https://github.com/linuxkid473/gbos-x86/releases/download/v38
@@ -83,6 +88,7 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 have_mods() { ls usb/modules/lib/modules/*/kernel/drivers/hid/intel-thc-hid/intel-thc.ko >/dev/null 2>&1; }
 have_swr() { [ -f usb/patched/vulkan.swiftshader.so ]; }
+have_ksu() { [ -f usb/ksu/manager.apk ] && [ -f usb/ksu/ksud ]; }
 have_parts() { for p in $PARTS; do [ -s lapis/parts/$p.img ] || return 1; done; }
 fetch() { # url dest sha
   mkdir -p "$(dirname "$2")"
@@ -99,6 +105,7 @@ have_parts || NEED="$NEED\n  - Google's recovery image: $GOOGLE (7.7 GB, from dl
 have_mods || NEED="$NEED\n  - $MODS (14 MB, from this project's GitHub release)"
 [ -f usb/firmware/rtl_nic/rtl8168h-2.fw ] || NEED="$NEED\n  - $FW (70 MB, from this project's GitHub release)"
 have_swr || NEED="$NEED\n  - $SWR (software GPU driver for AMD graphics, 6 MB, from this project's GitHub release)"
+have_ksu || NEED="$NEED\n  - $KSU_APK + $KSUD (19 MB, from the KernelSU release on GitHub)"
 if [ -z "$NEED" ]; then say "everything is already downloaded"; else
   printf 'This will download:%b\n' "$NEED"
 fi
@@ -128,6 +135,13 @@ if ! have_swr; then
   if ( fetch "$REL_SWR/$SWR" "build/dl/$SWR" "$SWR_SHA" ) && tar -xJf "build/dl/$SWR" -C usb; then :
   else printf '\nWARNING: no software GPU driver in this image; it will not render on AMD graphics (Intel laptops are unaffected).\n'; fi
 else say "    software GPU driver (SwiftShader): present"; fi
+if ! have_ksu; then
+  # KernelSU's userspace: the manager app (the kernel only accepts the official signature) and the daemon.
+  mkdir -p usb/ksu
+  fetch "$REL_KSU/$KSU_APK" "usb/ksu/manager.apk" "$KSU_APK_SHA"
+  fetch "$REL_KSU/$KSUD" "usb/ksu/ksud" "$KSUD_SHA"
+  chmod 755 usb/ksu/ksud
+else say "    KernelSU manager + ksud: present"; fi
 
 say "4/4 building the image ($BUILD_TYPE)"
 sh tools/make_gbos86_image.sh --type "$BUILD_TYPE" --data-size "$DATA_GB"

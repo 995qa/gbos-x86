@@ -60,6 +60,7 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 | Battery / AC | ACPI battery |
 | Play Store installs | With the patched libcrypto (SHA-256 no longer emulated) |
 | Screen-lock password | Software Gatekeeper (`gatekeeper/soft_gk.c`) |
+| Root for apps (KernelSU) | Built into the kernel; the manager app is installed on first boot, root is granted per app in it |
 | Correct display colours / black levels | Kernel #29: i915 ignores the HWC's gamma tables (see below) |
 
 | Not done / limited | |
@@ -76,7 +77,7 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 
 ```
 UEFI firmware
- └─ EFI/BOOT/BOOTX64.EFI      our kernel (android17-6.18 + patches) with stage0 built in as initramfs
+ └─ EFI/BOOT/BOOTX64.EFI      our kernel (android17-6.18 + patches + KernelSU) with stage0 built in as initramfs
      └─ stage0 (usb/stage0_init.sh, busybox)
          ├─ finds the gbos volume: USB stick (FAT label GBOS) or system volume (GBOSSYS)
          ├─ loads i915, logs to gbos/logs/boot-N/
@@ -128,6 +129,21 @@ UEFI firmware
 Laptop-specific drivers that Google's vendor modules can't provide (they're built for Google's kernel):
 battery/AC, Intel LPSS I2C (touchpad), legacy HDA audio and `btusb` are built into our kernel
 (`kernel/configure_whl.py`). Wi-Fi and Bluetooth firmware are in `usb/firmware/`.
+
+**Root for apps (KernelSU).** [KernelSU](https://github.com/tiann/KernelSU) is built into our kernel
+(`kernel/kernelsu/apply.sh` puts the sources in `drivers/kernelsu`, `CONFIG_KSU=y`), so apps can be
+given root the usual Android way: the manager app is installed on the first boot (from the stick,
+`usb/ksu/`), and it decides which app may use `su`. Two things are worth knowing:
+
+* The kernel only accepts a manager APK whose signing certificate is the official one
+  (827 bytes, sha256 `c371061b…`), so a Play Store copy of the app is **not** accepted: the APK comes
+  from the KernelSU release (`build.sh` puts it in `usb/ksu/manager.apk`). The daemon the kernel
+  starts (`/data/adb/ksud`) is in `usb/ksu/ksud` (the x86_64 Android build).
+* Since Linux 6.9 x86 dispatches syscalls through a switch statement instead of the syscall table,
+  so patching the table (what KernelSU's hooks do) has no effect. KernelSU's own answer to that is
+  `CONFIG_KSU_X86_PATCH_SYSCALL_DISPATCHER=y`, which patches the `x64_sys_call` dispatcher at runtime;
+  it is on in `kernel/configure_whl.py`. Nothing else in the kernel is changed, and SELinux stays
+  permissive (KernelSU is built in, not loaded late, so it does not switch SELinux to enforcing).
 
 `HANDOFF.md` is the chronological engineering log: every bug, its evidence and its fix. Read it before
 changing anything.
@@ -250,6 +266,7 @@ driver inside Google's userspace under QEMU.
 | `usb/gbos.cfg` | user settings: `MODE` (ask/live/install/boot), `DENSITY`, `RESOLUTION`, `LOAD_I915`, ... |
 | `tools/make_gbos86_image.sh` | builds the flashable gbOS86 USB image into `dist/` |
 | `usb/audio/` | audio HAL config for the HDA card |
+| `usb/ksu/` | KernelSU's manager app and daemon (installed on the stick by `build.sh`) |
 | `usb/out/BOOTX64.EFI` | **current kernel** (build #30: #29 + gbOS86 boot menu), boots directly from UEFI |
 | `usb/patched/`, `usb/libkm_compat.so` | patched Google libraries; `usb/patched/MANIFEST` (generated) lists each patch with the sha256 of its original |
 | `tools/swiftshader-android/` | builds SwiftShader as Android's Vulkan HAL (docker + NDK) for AMD GPUs |
@@ -259,9 +276,13 @@ driver inside Google's userspace under QEMU.
 | `usb/soft_gk`, `gatekeeper/` | software Gatekeeper binary and source |
 | `usb/make_super.py`, `make_bootdisk.py`, `make_initramfs.py` | build `super.img`, the fake ChromeOS boot disk, the stage0 initramfs |
 | `kernel/configure_whl.py` | kernel config for this laptop (from Google's recovery kernel config) |
+| `kernel/fetch_kernel_sources.sh` | fetches the kernel tree, the AOSP clang and KernelSU into the `gbos-ksrc` volume |
+| `kernel/kernelsu/apply.sh` | builds KernelSU into the kernel (`drivers/kernelsu`, `CONFIG_KSU=y`) |
 | `kernel/isa_emu_patch/` | instruction emulator + `apply.sh`/`build.sh`, `debug_cmdline.txt` |
+| `kernel/build_kernel.sh` | builds the whole kernel (patches, config, modules, initramfs) in the `gbos-kbuild` container |
+| `kernel/stage0_modules.txt` | the modules the stage0 initramfs carries (see `kernel/make_stage0_initramfs.sh`) |
 | `kernel/ashmem_shim/` | C memfd ashmem shim |
-| `kernel/isa_emu_test/` | QEMU tests: the emulator (16 instructions), hwdetect, `run_installer_emmc.py` (installer on an emulated eMMC) and `run_installer_sata.py` (on emulated SATA disks) |
+| `kernel/isa_emu_test/` | QEMU tests: the emulator (16 instructions), `run_isa_qemu.py` and `run_ksu_qemu.py` (KernelSU in the kernel), hwdetect, `run_installer_emmc.py` (installer on an emulated eMMC) and `run_installer_sata.py` (on emulated SATA disks) |
 | `isa-emu/` | emulator core + host known-answer tests |
 | `tools/` | image extraction (`lp_extract.py`), ISA scanner (`isa_scan.py`), binary patchers, and the new-build porting tools (`port_build.sh`, `check_new_build.sh`, see [`porting.md`](porting.md)) |
 | `lapis/BUILD` | the Google build this repo is ported to (id, version, download URL) |
@@ -332,8 +353,11 @@ Needs macOS or Linux with docker, python3, qemu (for tests) and ~30 GB free. The
 2. **`super.img`:** `usb/make_super.py OUT/super.img OUT/super.layout system_a=... vendor_a=...`
    (system_a first). It must stay under 4 GB (FAT32).
 3. **Kernel source:** AOSP `kernel/common`, branch `android17-6.18`, commit
-   `3938c8d97142d5cf31543aa96f864a2cf832dda0`, and AOSP prebuilt `clang-r584948c`. Both were fetched into
-   the docker volume `gbos-ksrc` (`/build/{src,inputs,out}`) by `gbrunch/tools/prepare_amd_build_inputs.py`.
+   `3938c8d97142d5cf31543aa96f864a2cf832dda0`, and the AOSP clang prebuilt. `kernel/fetch_kernel_sources.sh`
+   fetches all of it into the docker volume `gbos-ksrc` (`/build/{src,inputs,out}`): the kernel tree,
+   `clang-r584948b` (LLVM 22.0.1, the toolchain the shipped kernel was built with; the AOSP prebuilts
+   repo publishes the `b` build of that clang, not the `c` one) and the KernelSU sources
+   (`/build/inputs/KernelSU`, tag v3.3.1).
 4. **Config:** `kernel/configure_whl.py RECOVERY_KERNEL.config /build/out/.config`, then `make olddefconfig`;
    set `CONFIG_CMDLINE` from `kernel/isa_emu_patch/debug_cmdline.txt` (`debug_config.sh`) and
    `CONFIG_INITRAMFS_SOURCE=/build/out/gbos_stage0.cpio`.
@@ -346,16 +370,21 @@ Needs macOS or Linux with docker, python3, qemu (for tests) and ~30 GB free. The
    `kernel/isa_emu_patch/debug_selinux.sh` (the `gbos_permissive` parameter of the kernel command line: without it the
    kernel is not permissive, Android's init enforces SELinux and the boot stops right after "init: Loading SELinux policy").
    For the Surface Laptop 7 (Intel) also `kernel/isa_emu_patch/surface_sl7_sam.sh` and `python3 kernel/isa_emu_patch/sdw_sl7.py`
-   (see HANDOFF.md); both only touch modules.
+   (see HANDOFF.md); both only touch modules. And `kernel/kernelsu/apply.sh`, which copies KernelSU's
+   kernel sources into `drivers/kernelsu` and hooks them into `drivers/Makefile` and `drivers/Kconfig`
+   (`CONFIG_KSU=y`, `CONFIG_KSU_X86_PATCH_SYSCALL_DISPATCHER=y` come from `kernel/configure_whl.py`).
 6. **Build:** `kernel/isa_emu_patch/build.sh` (in `gbos-kbuild`), then `make modules_install` into
    `usb/modroot`, then `usb/make_initramfs.py usb/modroot usb/stage0.cpio`, copy it to
    `/build/out/gbos_stage0.cpio`, and build again so it's embedded. `arch/x86/boot/bzImage` is
    `BOOTX64.EFI`. `btusb.ko`/`btintel.ko`/`btrtl.ko` from `/build/out/drivers/bluetooth/` go in `usb/kmod/`.
-7. **Test the emulator:** `kernel/isa_emu_test/run_qemu.py BOOTX64.EFI` (expects 16/16 PASS).
+7. **Test the emulator:** `kernel/isa_emu_test/run_isa_qemu.py usb/out/BOOTX64.EFI` (expects 16/16 PASS),
+   and `kernel/isa_emu_test/run_ksu_qemu.py usb/out/BOOTX64.EFI` (expects KSU_QEMU_TEST_PASS: KernelSU
+   came up, its version is one the manager app accepts, and the x86_64 syscall dispatcher was patched).
 8. **Userspace pieces:** `tools/fetch_installer_tools.sh`; `gatekeeper/build.sh` (needs `gatekeeper/libs/`
    from the image: `libc`, `libdl` from the runtime APEX, `libbinder_ndk`, `libcrypto`, `liblog`);
    patched libraries with `tools/patch_libz_adler.py` and `tools/sha_redirect.py`. The hashes in
-   `hook.sh`/`apex_patch.sh` pin the exact originals they apply to.
+   `hook.sh`/`apex_patch.sh` pin the exact originals they apply to. KernelSU's manager app and daemon
+   come from the KernelSU release (`build.sh` puts them in `usb/ksu/`).
 9. **Firmware:** from linux-firmware (`intel/iwlwifi/iwlwifi-9000-pu-b0-jf-b0-46.ucode`,
    `intel/ibt-17-16-1.{sfi,ddc}`); `regulatory.db*` from the vendor image.
 

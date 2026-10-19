@@ -242,6 +242,7 @@ on property:sys.boot_completed=1
     start gbos_wmsize
     start gbos_displaydiag
     start gbos_aidiag
+    start gbos_ksu
 
 # AI diagnostics (Magic Pointer / AICore): usb/aidiag.sh writes logs/boot-N/ai-1.txt (90 s) and ai-2.txt (4 min).
 # The gbos_aidns_* services run one ping per app uid so aidiag can compare DNS as AICore (10107) with
@@ -276,6 +277,18 @@ service gbos_aidns_10119 /system/bin/sh -c "(ping -c 1 -W 5 www.google.com; ping
 service gbos_aidns_2000 /system/bin/sh -c "(ping -c 1 -W 5 www.google.com; ping -c 2 -W 5 ondevicesafety-pa.googleapis.com) > /dev/aidns_2000.txt 2>&1"
     user 2000
     group inet
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
+
+# KernelSU (the kernel part is built into the kernel, kernel/kernelsu/apply.sh): the userspace
+# side is the daemon the kernel starts (/data/adb/ksud) and the manager app, which the kernel
+# only accepts with the official signing certificate. Both come from the stick (gbos/ksu/).
+# Started twice: at post-fs-data (ksud, before the kernel's init.rc runs it) and after
+# boot_completed (the manager app; pm needs the framework).
+service gbos_ksu /system/bin/sh /postinstall/gbos/ksu/install.sh $N ${KSU_MANAGER:-1}
+    user root
+    group root
     seclabel u:r:shell:s0
     oneshot
     disabled
@@ -366,6 +379,8 @@ on post-fs-data
     start gbos_logcat
     start gbos_sync
     start gbos_crashlog
+    # KernelSU: the daemon has to be in /data/adb before the kernel's own init.rc runs it.
+    start gbos_ksu
 RC
   # Conscrypt (and identical) APEX libcrypto: the APEX is signed, so patch a copy and bind it over the
   # original once apexd has activated every APEX (init.rc's "wait_for_prop apexd.status activated" is in

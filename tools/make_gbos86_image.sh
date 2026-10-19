@@ -68,7 +68,7 @@ G="$STAGE/gbos/gbos"
 for f in hook.sh aidiag.sh early_patch.sh hwdetect.sh install.sh apex_patch.sh gbos.cfg crossystem bootdisk.img libkm_compat.so system_ext_manifest.xml soft_gk; do
   cp "$U/$f" "$G/$f"
 done
-for d in firmware patched audio installer kmod modules surface; do cp -R "$U/$d" "$G/$d"; done
+for d in firmware patched audio installer kmod modules surface ksu; do cp -R "$U/$d" "$G/$d"; done
 mkdir -p "$G/logs"
 
 # Configure boot mode
