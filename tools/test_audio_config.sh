@@ -249,6 +249,36 @@ chk "hook: generated config is copied into the tmpfs" "$H" 'cp -r $ASRC/. $A/$AC
 nochk "hook: no bind mount of the initramfs /tmp config" "$H" 'mount --bind $ASRC $A/$AC'
 sh -n "$H" && sh -n "$GEN" && ok "sh -n hook.sh gen_config.sh" || bad "syntax"
 
+# ---- 7. card selection: skip the GPU's HDMI audio, whatever it is called ----------------------------------------------------
+sed -n '/^# --- audio card selection/,/^# --- end audio card selection ---/p' "$H" > $W/cardsel.sh
+. $W/cardsel.sh
+mkcards() { # dir; then "id|name|codec,codec" per card, in order
+  d=$1; shift; rm -rf $d; mkdir -p $d; i=0; : > $d/cards
+  for c in "$@"; do
+    id=${c%%|*}; r=${c#*|}; nm=${r%%|*}; cs=${r#*|}
+    printf ' %s [%-15s]: HDA-Intel - %s\n                      %s at 0x1 irq 1\n' $i "$id" "$nm" "$nm" >> $d/cards
+    mkdir -p $d/card$i; j=0
+    for cd in $(echo "$cs" | tr ',' ' '); do [ "$cd" = - ] && continue; printf 'Codec: %s\nAddress: %s\n' "$(echo $cd | tr '_' ' ')" $j > "$d/card$i/codec#$j"; j=$((j+1)); done
+    i=$((i+1))
+  done
+}
+selcheck() { # name expected_id dir
+  got=$(ASOUND=$3 gbos_audio_card | sed -n 's/^ *[0-9]* \[\([^] ]*\) *\].*/\1/p')
+  [ "$got" = "$2" ] && ok "card: $1 -> $got" || bad "card: $1: wanted $2, got '$got'"
+}
+mkcards $W/a1 "Generic|HD-Audio Generic|ATI_R6xx_HDMI" "Generic_1|HD-Audio Generic|Realtek_ALC255"
+selcheck "AMD Ryzen laptop (both cards named HD-Audio Generic)" Generic_1 $W/a1
+mkcards $W/a2 "NVidia|HDA NVidia|Nvidia_GPU_8c_HDMI/DP" "PCH|HDA Intel PCH|Realtek_ALC295,Intel_Kabylake_HDMI"
+selcheck "NVIDIA dGPU is card 0" PCH $W/a2
+mkcards $W/a3 "sofhdadsp|sof-hda-dsp|Realtek_ALC285,Intel_Kabylake_HDMI"
+selcheck "SOF HDA with the codec's own HDMI" sofhdadsp $W/a3
+mkcards $W/a4 "PCH|HDA Intel PCH|Realtek_ALC3254,Intel_Skylake_HDMI"
+selcheck "plain Intel laptop" PCH $W/a4
+mkcards $W/a5 "sofsoundwire|sof-soundwire|-" "HDMI|HDA Intel HDMI|Intel_HDMI"
+selcheck "SoundWire card (no HDA codec files) falls back to the name rule" sofsoundwire $W/a5
+mkcards $W/a6 "NVidia|HDA NVidia|-" "PCH|HDA Intel PCH|-"
+selcheck "no codec files at all: name rule" PCH $W/a6
+
 echo "$n checks, $fail failed"
 [ $fail = 0 ] && echo AUDIO_CONFIG_TEST_PASS
 exit $fail

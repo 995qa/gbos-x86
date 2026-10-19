@@ -468,11 +468,25 @@ grep -v 'voldmanaged=usb' $F > /tmp/fstab.android-desktop \
 # laptop). For any other main card (SOF: sof-hda-dsp, sof-rt5682, ...) a copy is generated with that card's id and
 # name and the PCM numbers / mic / jack devices read from /proc/asound and /proc/bus/input/devices (usb/audio/gen_config.sh,
 # tools/test_audio_config.sh); the mixer controls are still a best-effort guess (they differ per codec).
+# --- audio card selection (tested by tools/test_audio_config.sh) ---
+# The main sound card = the first one with a codec that is not HDMI/DisplayPort audio. A laptop with a GPU registers the GPU's
+# HDMI/DP audio as card 0 (AMD: "HD-Audio Generic" id Generic, codec "ATI R6xx HDMI"; NVIDIA: "HDA NVidia"), so the name is no
+# guide. Cards without HDA codec files (SoundWire/ASoC) fall back to the first card whose name is not HDMI/GPU audio.
+# ASOUND= is only for the test.
+gbos_audio_card() {
+  _as=${ASOUND:-/proc/asound}
+  for _n in $(sed -n 's/^ *\([0-9][0-9]*\) \[.*/\1/p' $_as/cards 2>/dev/null); do
+    if cat $_as/card$_n/codec#* 2>/dev/null | grep '^Codec:' | grep -q -v -i -E 'hdmi|displayport'; then
+      grep "^ *$_n \[" $_as/cards; return 0
+    fi
+  done
+  grep '\[' $_as/cards 2>/dev/null | grep -v -i -E 'hdmi|nvidia|HDA ATI|radeon' | head -n 1
+}
+# --- end audio card selection ---
 A=/new/vendor/etc/audio
 AC=gbos-hda-pch
 if [ -f $G/audio/gbos-hda-pch/audio_config.xml ]; then
-  # Not the GPU's HDMI/DP audio (a laptop with an NVIDIA/AMD dGPU registers it as card 0, name "HDA NVidia", with no "HDMI" in it).
-  CARD=$(grep '\[' /proc/asound/cards 2>/dev/null | grep -v -i -E 'hdmi|nvidia|HDA ATI|radeon' | head -n 1)
+  CARD=$(gbos_audio_card)
   CID=$(echo "$CARD" | sed -n 's/^ *[0-9]* \[\([^] ]*\) *\].*/\1/p'); CNAME=$(echo "$CARD" | sed -n 's/.* - //p')
   mkdir -p /tmp/gbos-audio
   if [ -n "$CID" ] && [ "$CID" != PCH ]; then
