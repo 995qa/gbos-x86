@@ -368,7 +368,8 @@ grep -v 'voldmanaged=usb' $F > /tmp/fstab.android-desktop \
 A=/new/vendor/etc/audio
 AC=gbos-hda-pch
 if [ -f $G/audio/gbos-hda-pch/audio_config.xml ]; then
-  CARD=$(grep '\[' /proc/asound/cards 2>/dev/null | grep -v -i hdmi | head -n 1)
+  # Not the GPU's HDMI/DP audio (a laptop with an NVIDIA/AMD dGPU registers it as card 0, name "HDA NVidia", with no "HDMI" in it).
+  CARD=$(grep '\[' /proc/asound/cards 2>/dev/null | grep -v -i -E 'hdmi|nvidia|HDA ATI|radeon' | head -n 1)
   CID=$(echo "$CARD" | sed -n 's/^ *[0-9]* \[\([^] ]*\) *\].*/\1/p'); CNAME=$(echo "$CARD" | sed -n 's/.* - //p')
   mkdir -p /tmp/gbos-audio
   if [ -n "$CID" ] && [ "$CID" != PCH ]; then

@@ -128,7 +128,12 @@ Reports from people who booted the stick (2026-10-18). A row says what was repor
 | Lenovo ThinkPad T470 | Intel 7th gen | **Works** | Reported as working with no setup | Short report |
 | Intel NUC8BEH (mini PC) | Core i3-8109U, 8 GB | **Works** (live) | Wi-Fi, Bluetooth, display and brightness (external monitor), keyboard (external), USB ports | Sound not tested. SATA M.2 SSD: install support for SATA disks added afterwards (QEMU-tested only, not yet tried on this NUC) |
 | HP Envy 13-aq0xxx | Core i5-8265U, 8 GB | **Works** | Reported as working great, live and installed to the NVMe (kernel #32) | Per-device detail is in the forum thread |
+| Dell Latitude 5300 2-in-1 | Core i7-8665U, 16 GB | **Works** | Wi-Fi, Bluetooth, sound, touchpad, backlight, display, touchscreen, hinge, webcam, pen, suspend | Auto-rotate (sensor driver added to the next kernel), mic-mute LED |
+| Lenovo ThinkPad T480 | Core i5-8350U, 16 GB | **Works** | Wi-Fi, Bluetooth, sound, touchpad, touchscreen, keyboard, brightness, display, webcam (installed) | Slow to wake; Wi-Fi needs a toggle after sleep |
 | HP OmniBook 7 | Core Ultra 5 225U, 16 GB | Partly | Touchpad, keyboard, brightness, display | Wi-Fi (Intel BE201). Sound, webcam, Bluetooth not tested |
+| HP Pavilion Power 15 | Core i7-7700HQ + GTX 1050, 16 GB | Partly | Wi-Fi, Bluetooth, touchpad, brightness, display, webcam | Speakers (fixed in the next update: audio config picked the NVIDIA HDMI card); dock/DisplayLink and the NVIDIA GPU have no driver |
+| Lenovo ThinkPad T14 Gen 2 | Core i5-1135G7, 32 GB | Partly | Wi-Fi, Bluetooth, touchpad, keyboard, brightness, display (installed) | Sound, microphone, webcam. Needs a full `hwdetect.txt` |
+| Microsoft Surface Pro 4 | Core i5-6300U | Partly | Screen, keyboard, touchpad, brightness, microphones | Wi-Fi (Marvell 88W8897: driver added to the next kernel), Bluetooth, touchscreen, cameras |
 | Dell Inspiron 7391 2-in-1 | Core i7-10510U, 8 GB | Partly | Wi-Fi, Bluetooth, touchpad, keyboard, brightness, display, webcam, touchscreen (installed to NVMe) | Sound. The reporter notes this laptop uses SOF audio firmware on regular Linux |
 | Realme Book Slim (2021) | Core i5-1135G7, 8 GB | Partly | Wi-Fi, Bluetooth, touchpad, keyboard, brightness, display, webcam (live USB) | Sound. No `hwdetect.txt` yet |
 | Fujitsu Arrows Tab V727 (tablet) | Core m3-7Y30, 8 GB | Partly | Wi-Fi (Intel 8265), Bluetooth, sound card detected (HDA Intel PCH); live USB on kernel #33, USB 2.0 | Tagged "mostly works"; what fails is not listed in the report |
