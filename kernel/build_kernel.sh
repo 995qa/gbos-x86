@@ -92,14 +92,20 @@ EOF
 # 5. the results
 mkdir -p "$ROOT/usb/out" "$ROOT/usb/kmod"
 cp /dev/null /dev/null
-docker run --rm -v "$VOL":/build -v "$ROOT":/host gbos-kbuild bash -s <<'EOF'
+docker run --rm -v "$VOL":/build -v "$ROOT":/host gbos-kbuild bash -s <<EOF
 set -e
 cp /build/out/arch/x86/boot/bzImage /host/usb/out/BOOTX64.EFI
+# The module tree goes to usb/modules/lib/modules/<uname -r>/, the layout the release tarball
+# has and the one usb/hwdetect.sh expects (it binds gbos/modules/lib/modules over /lib/modules).
 rm -rf /host/usb/modules
-cp -a /build/modroot_all/lib/modules /host/usb/modules/
+mkdir -p /host/usb/modules/lib
+cp -a /build/modroot_all/lib/modules /host/usb/modules/lib/
+rm -f /host/usb/modules/lib/modules/*/build
+# the files were written by root in the container: give them back to the user
+chown -R $(id -u):$(id -g) /host/usb/modules /host/usb/kmod /host/usb/out/BOOTX64.EFI
 for m in btusb btintel btrtl; do
-  f=$(find /build/out/drivers/bluetooth -name "$m.ko" | head -1)
-  [ -n "$f" ] && cp "$f" /host/usb/kmod/$m.ko
+  f=\$(find /build/out/drivers/bluetooth -name "\$m.ko" | head -1)
+  [ -n "\$f" ] && cp "\$f" /host/usb/kmod/\$m.ko
 done
 EOF
 echo "kernel: usb/out/BOOTX64.EFI ($(stat -c %s "$ROOT/usb/out/BOOTX64.EFI") bytes)"
