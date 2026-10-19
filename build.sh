@@ -66,8 +66,8 @@ if [ -z "$BUILD_TYPE" ]; then
   fi
 fi
 
-REL=https://github.com/linuxkid473/gbos-x86/releases/download/v37
-MODS=gbos86-modules-6.18.21-gbos-whl-r3.tar.xz;            MODS_SHA=ce9c2457dc5f99c1d216aaebee242c8abfd748ad07a973b6b75675e5c7c2a31e
+REL=https://github.com/linuxkid473/gbos-x86/releases/download/v39
+MODS=gbos86-modules-6.18.21-gbos-whl-r4.tar.xz;            MODS_SHA=ae9e2111af1873106fba4cc2e20152987c6ef4a08d17d133c898eacaedb9bc71
 REL_FW=https://github.com/linuxkid473/gbos-x86/releases/download/v35
 FW=gbos86-firmware-12dfe670-sof2026.09.2-r4.tar.xz;        FW_SHA=8ad4ce620194e6555fe747bff95eb75b74c3c8f198ff7e3d5280c02f37bb1463
 # SwiftShader as an Android Vulkan HAL (tools/swiftshader-android/build.sh): hook.sh binds it over Google's Intel Vulkan driver on
@@ -81,7 +81,7 @@ PARTS="system_a vendor_a product_a system_ext_a system_dlkm_a vendor_dlkm_a"
 say() { printf '\n== %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
-have_mods() { ls usb/modules/lib/modules/*/kernel/drivers/hid/intel-thc-hid/intel-thc.ko >/dev/null 2>&1; }
+have_mods() { ls usb/modules/lib/modules/*/kernel/drivers/iio/accel/hid-sensor-accel-3d.ko >/dev/null 2>&1; }
 have_swr() { [ -f usb/patched/vulkan.swiftshader.so ]; }
 have_parts() { for p in $PARTS; do [ -s lapis/parts/$p.img ] || return 1; done; }
 fetch() { # url dest sha
