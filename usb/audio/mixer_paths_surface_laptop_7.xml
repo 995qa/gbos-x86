@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mixer>
+	<!-- gbos: card sofsoundwire on the Surface Laptop 7 (Intel): RT1320 amp + RT721 jack codec.
+	     The amp's output terminal switches (OT23 L/R) are Off after boot, which is why Speaker was silent.
+	     The BIOS declares a second, non-existent RT1320, so the real amp is "rt1320-2" here; "rt1320-1" is listed too
+	     for machines without that ghost (controls the card doesn't have are skipped by audio_route).
+	     The headset mic is the jack codec's FU0F capture. Headphone needs nothing: jack detection enables the pin. -->
+	<path name="Speaker">
+		<ctl name="rt1320-1 OT23 L Switch" value="1" />
+		<ctl name="rt1320-1 OT23 R Switch" value="1" />
+		<ctl name="rt1320-2 OT23 L Switch" value="1" />
+		<ctl name="rt1320-2 OT23 R Switch" value="1" />
+	</path>
+	<path name="Headphone">
+	</path>
+	<path name="Mic">
+		<ctl name="rt721 FU0F Capture Switch" value="1 1" />
+	</path>
+	<path name="InternalMic">
+	</path>
+	<path name="HDMI1">
+	</path>
+	<path name="HDMI2">
+	</path>
+	<path name="HDMI3">
+	</path>
+</mixer>

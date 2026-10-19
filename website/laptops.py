@@ -78,11 +78,11 @@ LAPTOPS = [
          broken='Display on sticks built before firmware v35',
          notes='Cause found: the <code>xe</code> graphics driver could not load its Panther Lake GuC firmware. Firmware release v35 includes it; a patch zip exists for older sticks. '
                'Waiting for the reporter to confirm.'),
-    dict(name='Microsoft Surface Laptop 7 (Intel, for Business)', cpu='Core Ultra 7 266V (Lunar Lake), 16 GB, 1 TB', status='pending',
-         works='Boots; black screen after choosing live boot on the reporter\'s stick',
-         broken='Display on sticks built before firmware v35. Built-in keyboard, Wi-Fi and sound are not known to work (no logs yet)',
-         notes='Cause found: the <code>xe</code> graphics driver could not load its Lunar Lake GuC firmware. Firmware release v35 includes it; a patch zip exists for older sticks. '
-               'The touchpad is detected, but the built-in keyboard does not appear as an input device. Surface-specific input drivers may be needed; waiting for a log from a working screen.'),
+    dict(name='Microsoft Surface Laptop 7 (Intel, for Business)', cpu='Core Ultra 7 266V (Lunar Lake), 16 GB, 1 TB', status='partial',
+         works='Wi-Fi (BE201), internal keyboard, battery and charger, fan, speakers, headset jack, touchpad with gestures and click, Bluetooth, stable picture',
+         broken='Internal microphone, HDMI audio, camera, touchscreen, suspend and resume',
+         notes='Needed several kernel and boot-script changes (Surface Aggregator, SoundWire audio, <code>XE_PARAMS</code> for the display); see the Surface Laptop 7 section of the README and HANDOFF.md. '
+               'Before firmware v35 the screen stayed black (the <code>xe</code> GuC firmware was missing).'),
     dict(name='HP 14-ne0013dx', cpu='Intel (details not given)', status='no',
          works='',
          broken='Did not work for the reporter',

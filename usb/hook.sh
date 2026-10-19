@@ -33,6 +33,14 @@ gbos_bind_patches() {
   done < $G/patched/MANIFEST
   log "hook: PATCH-STATUS $gp_ok applied, $gp_bad not applied"
 }
+# Google's userspace needs AVX: the first instructions of its dynamic linker (__linker_init: vxorps/vmovups ymm) are VEX-encoded,
+# and the kernel's emulator only covers the *newer* extensions (GFNI, VNNI, SHA-NI, ...), not baseline AVX. A CPU without AVX
+# (many Celeron/Pentium/Atom parts) kills init at once ("traps: init[1] trap invalid opcode ... in linker64", then a silent hang).
+# Say so on screen instead. REQUIRE_AVX=0 in gbos.cfg boots anyway.
+if [ "${REQUIRE_AVX:-1}" != 0 ] && ! grep -qw avx ${CPUINFO:-/proc/cpuinfo}; then
+  log "CPU: $(grep -m1 'model name' ${CPUINFO:-/proc/cpuinfo})"
+  fail "this CPU has no AVX, so Google's init cannot run on it (not fixable by drivers). Power off, or type exit to try anyway (REQUIRE_AVX=0 in gbos.cfg skips this check)."
+fi
 
 # zram is a module here (=m in Google's config too); mmd_setup aborts without /sys/block/zram0.
 modprobe zram && log "hook: zram loaded" || log "hook: modprobe zram FAILED"
@@ -45,6 +53,9 @@ FWP=/sys/module/firmware_class/parameters/path
 if [ "$HWDETECT" != 0 ] && [ -f $G/hwdetect.sh ] && [ -d $G/modules/lib/modules ]; then
   . $G/hwdetect.sh
   gbos_hwdetect 15
+  # zram (Android's mmd_setup aborts without it, see "zram setup failed" in crash.txt) must be loadable: when it is not in the
+  # initramfs the early modprobe above fails, and the module tree from the stick is mounted only now.
+  grep -q '^zram ' /proc/modules || { modprobe zram && log "hook: zram loaded (after hwdetect)" || log "hook: modprobe zram FAILED (after hwdetect)"; }
   # Late firmware requests (after switch_root) see the stick as /postinstall.
   echo -n /postinstall/gbos/firmware > $FWP
 else
@@ -77,6 +88,83 @@ else
     echo -n /postinstall/gbos/firmware > $FWP
   fi
 fi
+
+# --- software rendering for GPUs Google's image has no driver for (AMD) -- gbos_gpu_* functions ---
+# Google's image renders through ANGLE -> Vulkan, and its only Vulkan driver is Intel's ANV (/vendor/lib64/hw/vulkan.intel.so);
+# buffers come from minigbm (gralloc, /vendor/lib64/libminigbm_gralloc.so), which has no amdgpu backend. On a laptop whose GPU
+# is not Intel's, "software GPU" mode swaps in (a) SwiftShader, a CPU Vulkan driver, over vulkan.intel.so (ro.hardware.vulkan=intel
+# keeps working, no prop change) and (b) a gralloc whose generic linear-buffer backend answers to DRM driver "amdgpu" and which
+# lets the CPU driver lock any buffer (tools/patch_gralloc_amdgpu.py; likewise libgbm.so, tools/patch_libgbm_amdgpu.py).
+# GPU_SOFTWARE in gbos.cfg: auto (default: only when no Intel GPU is present and another GPU driver is bound), 1 (force, even
+# on Intel), 0 (never). SYSFS= and NEWROOT= are only for tools/test_gpu_select.sh.
+GBOS_GRALLOC_SHA=d48536951fd0e9643e71a5c8843e90833ce3e212e182782185470e2fbbfad673
+GBOS_LIBGBM_SHA=64a0f2537a5917822cb3f538dc74229e7ccf4ca45a30265bb97f742678ba294e
+GBOS_VKINTEL_SHA=5c687450523ea9ed9e8d4d9cc98ef4fef6c8d592d46db4bf425ad571dc6f7c73
+# "cardN driver" per DRM card (connectors like card0-eDP-1 are skipped); driver "none" = no driver bound.
+gbos_gpu_cards() {
+  for c in ${SYSFS:-/sys}/class/drm/card*; do
+    [ -e "$c" ] || continue
+    case ${c##*/} in card*-*) continue;; esac
+    d=$(readlink $c/device/driver 2>/dev/null); d=${d##*/}
+    echo "${c##*/} ${d:-none}"
+  done
+}
+# A driver that really drives a GPU, as opposed to the firmware framebuffer (simpledrm) or the virtual test driver (vkms).
+gbos_gpu_real() { case "$1" in none|simpledrm|simple-framebuffer|efifb|vesafb|vkms) return 1;; esac; return 0; }
+# PCI display controllers (class 0x03xxxx) by vendor: "yes" when one is Intel's.
+gbos_gpu_intel_pci() {
+  for d in ${SYSFS:-/sys}/bus/pci/devices/*; do
+    [ -e "$d/class" ] || continue
+    case "$(cat $d/class)" in 0x03*) [ "$(cat $d/vendor)" = 0x8086 ] && return 0;; esac
+  done
+  return 1
+}
+# Sets GPU_SW=1 (software rendering wanted) or 0 and logs why. $1 = seconds to wait for a non-Intel driver to bind.
+gbos_gpu_decide() {
+  GPU_SW=0
+  case "${GPU_SOFTWARE:-auto}" in
+    0) log "hook: software rendering: off (GPU_SOFTWARE=0)"; return 0;;
+    1) GPU_SW=1; log "hook: software rendering: on (GPU_SOFTWARE=1, forced)"; return 0;;
+  esac
+  w=0; real=; intel=
+  while :; do
+    real=; intel=
+    for e in $(gbos_gpu_cards | tr ' ' ','); do
+      drv=${e#*,}
+      case "$drv" in i915|xe) intel=$drv;; *) gbos_gpu_real "$drv" && real="$real ${e%%,*}:$drv";; esac
+    done
+    # Intel (bound, or at least present on the PCI bus): leave everything as it is, whatever else is installed.
+    [ -n "$intel" ] && { log "hook: software rendering: off (auto; Intel GPU driver $intel bound)"; return 0; }
+    gbos_gpu_intel_pci && { log "hook: software rendering: off (auto; Intel display controller present)"; return 0; }
+    [ -n "$real" ] && break
+    [ $w -ge ${1:-0} ] && break
+    sleep 1; w=$((w+1))
+  done
+  if [ -n "$real" ]; then
+    GPU_SW=1; log "hook: software rendering: on (auto; no Intel GPU, DRM:$real, after ${w}s)"
+  else
+    log "hook: software rendering: off (auto; no DRM GPU driver bound after ${w}s; cards: $(gbos_gpu_cards | tr '\n' ';'))"
+  fi
+}
+# Bind patched/$2 over $3 when it exists and $3 is the exact original ($4 = its sha256). $1 = what it is, for the log.
+gbos_gpu_bind() {
+  if [ ! -f "$G/patched/$2" ]; then log "hook: software rendering: gbos/patched/$2 missing ($1 not replaced; stick too old?)"; return 1; fi
+  if [ "$(sha256sum "$3" | cut -d' ' -f1)" != "$4" ]; then log "hook: software rendering: $1 NOT replaced (unexpected original, new Google build?)"; return 1; fi
+  mount --bind "$G/patched/$2" "$3" && log "hook: software rendering: $1 replaced" || { log "hook: software rendering: $1 bind FAILED"; return 1; }
+}
+# (a) gralloc: minigbm gets a backend for DRM driver "amdgpu" (linear dumb buffers); libgbm (camera/codec HALs) likewise.
+# (b) SwiftShader over the Intel Vulkan driver. Without (a) or (b) nothing can draw, so any failure there cancels the prop changes.
+gbos_gpu_enable() {
+  V=${NEWROOT:-/new}/vendor
+  gbos_gpu_bind "gralloc (libminigbm_gralloc, amdgpu backend)" libminigbm_gralloc.amdgpu.so $V/lib64/libminigbm_gralloc.so $GBOS_GRALLOC_SHA || GPU_SW=0
+  gbos_gpu_bind "libgbm (amdgpu backend)" libgbm.amdgpu.so $V/lib64/libgbm.so $GBOS_LIBGBM_SHA
+  gbos_gpu_bind "Vulkan driver (SwiftShader, CPU)" vulkan.swiftshader.so $V/lib64/hw/vulkan.intel.so $GBOS_VKINTEL_SHA || GPU_SW=0
+}
+# --- end software rendering ---
+
+# Let the DRM driver (amdgpu probes for several seconds and loads ~20 firmware files) finish before deciding.
+gbos_gpu_decide ${GPU_WAIT:-25}
+[ "$GPU_SW" = 1 ] && gbos_gpu_enable
 
 # drm.debug=0x04 (KMS only; not ATOMIC, which logs every frame): i915 dumps gamma/CSC mode and range per modeset while
 # drm_hwcomposer first sets up the panel. gbos.rc turns it off at boot_completed. Washed-out colours.
@@ -128,7 +216,7 @@ service gbos_sync /system/bin/sh -c "while true; do sleep 5; sync; done"
     seclabel u:r:shell:s0
 
 # Sound diagnostics, 60 s after boot: ALSA cards/PCMs/codec (incl. control names) and audioserver state.
-service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; ( head -n 3000 cards pcm devices card0/id card0/codec*; ls -l /dev/snd; dumpsys media.audio_flinger; dumpsys media.audio_policy ) > /postinstall/gbos/logs/boot-$N/audio.txt 2>&1"
+service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; ( head -n 3000 cards pcm devices card0/id card0/codec*; ls -l /dev/snd; grep '^N: Name' /proc/bus/input/devices; dumpsys media.audio_flinger; dumpsys media.audio_policy ) > /postinstall/gbos/logs/boot-$N/audio.txt 2>&1; sh /postinstall/gbos/audio/mixdiag.sh $N"
     user root
     group root audio
     seclabel u:r:shell:s0
@@ -137,6 +225,8 @@ on property:sys.boot_completed=1
     # KMS debug was on during the HWC's first modesets (set early in hook.sh); turn it off again.
     write /sys/module/drm/parameters/debug 0
     start gbos_audiodiag
+    start gbos_devname
+    start gbos_iptsd
     start gbos_wmsize
     start gbos_displaydiag
     start gbos_aidiag
@@ -193,6 +283,23 @@ service gbos_displaydiag /system/bin/sh -c "sleep 70; ( mount -t debugfs debugfs
     group root graphics
     seclabel u:r:shell:s0
     oneshot
+
+# Touchpad gestures on the Surface Laptop 7: iptsd (a fork) turns the touchpad's raw frames into a multitouch uinput device.
+# The script exits at once without surface/iptsd on the stick and when the machine has no such touchpad; oneshot so init does not restart it.
+service gbos_iptsd /system/bin/sh /postinstall/gbos/surface/iptsd-run.sh $N
+    user root
+    group root input
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
+
+# "Device name" in Settings (Settings.Global.device_name): kept in step with DEVICE_MODEL from gbos.cfg.
+service gbos_devname /system/bin/sh -c "sleep 15; [ -n '$DEVICE_MODEL' ] && settings put global device_name '$DEVICE_MODEL'"
+    user root
+    group root
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
 
 # Software Gatekeeper (gatekeeper/soft_gk.c) in place of the Trusty one, which never answers.
 service gbos_soft_gk /postinstall/gbos/soft_gk
@@ -272,13 +379,27 @@ fi
 # kernel side is fixed in i915_edp_colorspace.sh). Declare it sRGB-only.
 case "$DENSITY" in ''|*[!0-9]*) DENSITY=;; esac
 DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_color_display=|^ro.surface_flinger.has_HDR_display='
+[ "$GPU_SW" = 1 ] && DROP="$DROP|^ro.surface_flinger.supports_background_blur=|^ro.vendor.hwc.use_overlay_planes="   # blur on the CPU is far too slow
 [ -n "$DENSITY" ] && DROP="$DROP|^ro.sf.lcd_density="
+[ -n "$DEVICE_MODEL" ] && DROP="$DROP|^ro.product.model=|^ro.product.vendor.model=|^ro.product.marketname=|^ro.product.vendor.marketname="
 { grep -v -E "$DROP" /new/vendor/build.prop
   echo "ro.surface_flinger.has_wide_color_display=false"
   echo "ro.surface_flinger.has_HDR_display=false"
+  if [ "$GPU_SW" = 1 ]; then
+    echo "ro.surface_flinger.supports_background_blur=0"
+    # drm_hwcomposer picks its backend by DRM driver: i915/xe get "client" (everything composited by SurfaceFlinger), any other
+    # driver "generic", which also tries overlay planes. Unknown driver, so stay on the primary plane like Intel does.
+    echo "ro.vendor.hwc.use_overlay_planes=false"
+  fi
   if [ -n "$DENSITY" ]; then echo "ro.sf.lcd_density=$DENSITY"; fi
+  if [ -n "$DEVICE_MODEL" ]; then
+    echo "ro.product.model=$DEVICE_MODEL"
+    echo "ro.product.vendor.model=$DEVICE_MODEL"
+    echo "ro.product.marketname=$DEVICE_MODEL"
+    echo "ro.product.vendor.marketname=$DEVICE_MODEL"
+  fi
 } > /tmp/vendor.build.prop && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop \
-  && log "hook: vendor build.prop: protected_vm.supported hidden, sRGB-only display, lcd_density=${DENSITY:-stock}"
+  && log "hook: vendor build.prop: protected_vm.supported hidden, sRGB-only display, lcd_density=${DENSITY:-stock}, software GPU props=${GPU_SW:-0}"
 # Only one Trusty VM may own CID 200: drop the plain launcher's auto-start so the on-demand
 # (accessor-registering) launcher runs it, falling back to non-protected by itself.
 R=/new/system_ext/etc/init/desktop-trusty_security_vm_launcher.rc
@@ -333,7 +454,8 @@ grep -v 'voldmanaged=usb' $F > /tmp/fstab.android-desktop \
 # Audio: the audio HAL (dras) needs a config whose <soundcard> equals the ALSA card id. Google ships only its SOF
 # SoundWire card; gbos/audio/gbos-hda-pch is the legacy-HDA one (card id PCH, true for nearly every Intel PCH HDA
 # laptop). For any other main card (SOF: sof-hda-dsp, sof-rt5682, ...) a copy is generated with that card's id and
-# name, which is a best-effort mapping (mixer controls differ per codec).
+# name and the PCM numbers / mic / jack devices read from /proc/asound and /proc/bus/input/devices (usb/audio/gen_config.sh,
+# tools/test_audio_config.sh); the mixer controls are still a best-effort guess (they differ per codec).
 A=/new/vendor/etc/audio
 AC=gbos-hda-pch
 if [ -f $G/audio/gbos-hda-pch/audio_config.xml ]; then
@@ -342,16 +464,33 @@ if [ -f $G/audio/gbos-hda-pch/audio_config.xml ]; then
   CID=$(echo "$CARD" | sed -n 's/^ *[0-9]* \[\([^] ]*\) *\].*/\1/p'); CNAME=$(echo "$CARD" | sed -n 's/.* - //p')
   mkdir -p /tmp/gbos-audio
   if [ -n "$CID" ] && [ "$CID" != PCH ]; then
-    AC=gbos-gen; rm -rf /tmp/gbos-audio/$AC; cp -r $G/audio/gbos-hda-pch /tmp/gbos-audio/$AC
-    sed -i "s/HDA Intel PCH/$CNAME/g; s/PCH/$CID/g" /tmp/gbos-audio/$AC/*.xml
-    sed "s/<soundcard>PCH/<soundcard>$CID/; s#gbos-hda-pch#$AC#" $G/audio/audio_default.xml > /tmp/gbos-audio/audio_default.xml
+    AC=gbos-gen
+    # gen_config.sh also remaps PCM numbers, the internal mic (SOF: the DMIC PCM) and the jack input devices to what this card has
+    if [ -f $G/audio/gen_config.sh ] && AMSG=$(sh $G/audio/gen_config.sh $G/audio/gbos-hda-pch $G/audio/audio_default.xml /tmp/gbos-audio $AC "$CID" "$CNAME" 2>&1); then
+      log "hook: audio $AMSG"
+      cat /tmp/gbos-audio/$AC/audio_config.xml > $L/audio_config.generated.xml 2>/dev/null
+    else
+      log "hook: audio gen_config.sh missing or failed (${AMSG:-no output}), plain card id/name substitution"
+      rm -rf /tmp/gbos-audio/$AC; cp -r $G/audio/gbos-hda-pch /tmp/gbos-audio/$AC
+      sed -i "s/HDA Intel PCH/$CNAME/g; s/PCH/$CID/g" /tmp/gbos-audio/$AC/*.xml
+      sed "s/<soundcard>PCH/<soundcard>$CID/; s#gbos-hda-pch#$AC#" $G/audio/audio_default.xml > /tmp/gbos-audio/audio_default.xml
+    fi
+    # Machine-specific mixer routes: the HDA template's controls do not exist on SoundWire cards. Keyed by DMI as well as the card id,
+    # because other SoundWire laptops also have the card id sofsoundwire.
+    if [ "$CID" = sofsoundwire ] && [ -f $G/audio/mixer_paths_surface_laptop_7.xml ] \
+       && grep -qi 'Surface Laptop.*7th Edition' /sys/class/dmi/id/product_name 2>/dev/null; then
+      cp $G/audio/mixer_paths_surface_laptop_7.xml /tmp/gbos-audio/$AC/mixer_paths.xml \
+        && log "hook: audio mixer_paths for the Surface Laptop 7 (RT1320/RT721) installed"
+    fi
+    # ASRC lives in /tmp of the initramfs, which switch_root deletes: a bind mount of it is empty in Android (dras: "Failed to read
+    # /vendor/etc/audio/gbos-gen/audio_config.xml"), so the files are copied into the tmpfs over /vendor/etc/audio below.
     ASRC=/tmp/gbos-audio/$AC; ADEF=/tmp/gbos-audio/audio_default.xml
   else
     ASRC=$G/audio/gbos-hda-pch; ADEF=$G/audio/audio_default.xml
   fi
   mkdir -p /tmp/vaudio && mount --bind $A /tmp/vaudio && mount -t tmpfs -o mode=0755 tmpfs $A \
     && for f in /tmp/vaudio/*; do n=${f##*/}; { [ -d $f ] && mkdir -p $A/$n || touch $A/$n; } && mount --bind $f $A/$n; done \
-    && mkdir -p $A/$AC && mount --bind $ASRC $A/$AC \
+    && mkdir -p $A/$AC && cp -r $ASRC/. $A/$AC/ \
     && mount --bind $ADEF /new/vendor/etc/data/hal_configs/audio_default.xml \
     && log "hook: audio config $AC (card id ${CID:-none}, name ${CNAME:-none}) active"
 fi

@@ -27,6 +27,10 @@
 #   usb/firmware/         Intel Wi-Fi/Bluetooth firmware (linux-firmware) + regulatory.db
 /usb/out/*
 !/usb/out/BOOTX64.EFI
+# Surface Laptop 7 helper binaries, built by tools/build_surface_tools.sh (not committed)
+/usb/surface/iptsd
+/usb/surface/iptsd-check-device
+/usb/audio/tinymix
 /usb/modroot/
 /usb/stage0.cpio
 /gatekeeper/libs/
@@ -58,3 +62,5 @@ __pycache__/
 # one-command build downloads
 /build/
 
+# SwiftShader Vulkan HAL for AMD GPUs (24 MB): fetched by build.sh from the GitHub release (tools/swiftshader-android builds it)
+/usb/patched/vulkan.swiftshader.so

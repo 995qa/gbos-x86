@@ -84,6 +84,21 @@ _m('INTEL_ISH_HID', 'INTEL_ISH_HOST', 'HID_RMI', 'RMI4_CORE', 'RMI4_I2C', 'RMI4_
 _y('IIO', 'IIO_BUFFER', 'IIO_TRIGGER', 'IIO_TRIGGERED_BUFFER', 'IIO_KFIFO_BUF')
 _m('HID_SENSOR_IIO_COMMON', 'HID_SENSOR_IIO_TRIGGER', 'HID_SENSOR_ACCEL_3D', 'HID_SENSOR_GYRO_3D', 'HID_SENSOR_MAGNETOMETER_3D',
    'HID_SENSOR_ALS', 'HID_SENSOR_PROX', 'HID_SENSOR_INCLINOMETER_3D', 'HID_SENSOR_DEVICE_ROTATION', 'HID_SENSOR_CUSTOM_SENSOR')
+# Intel Touch Host Controller (Lunar Lake and newer laptops put keyboard/touchpad/touch behind it:
+# QuickI2C = HID-over-I2C, QuickSPI = HID-over-SPI; PCI 8086:a848/a84a and a849/a84b on Lunar Lake).
+_m('INTEL_THC_HID', 'INTEL_QUICKSPI', 'INTEL_QUICKI2C')
+# Microsoft Surface Laptop 7 (Intel, Lunar Lake). Keyboard, battery, fan and sensors sit behind the Surface Aggregator Module (SAM):
+# a UART serdev device (ACPI MSHW0084) whose wakeup IRQ is a GPIO on the Lunar Lake pin controller. Lunar Lake is handled by the generic
+# intel-pinctrl platform driver (ACPI INTC105F); PINCTRL_METEORLAKE does not cover it. Google's config has SERIAL_8250_RUNTIME_UARTS=0,
+# which makes serial8250_init() return early, so no 8250 UART (and no SAM) can ever register: 4 is the upstream default.
+# IWLMLD: the Wi-Fi 7 BE201 of Lunar Lake only has an entry in the MLD device table (else "No config found for PCI dev a840/00e4", -22).
+# The RT1320 amp / RT721 jack codec are modules in Google's config already; listed so --check notices if they ever disappear.
+# Same values as the kernel that ran on the hardware (PINCTRL_INTEL_PLATFORM was a module there).
+_y('SERIAL_DEV_BUS', 'SURFACE_PLATFORMS', 'SURFACE_AGGREGATOR_BUS')
+_m('PINCTRL_INTEL_PLATFORM', 'SURFACE_AGGREGATOR', 'SURFACE_AGGREGATOR_REGISTRY', 'SURFACE_AGGREGATOR_HUB', 'SURFACE_HID_CORE', 'SURFACE_HID',
+   'BATTERY_SURFACE', 'CHARGER_SURFACE', 'SURFACE_PLATFORM_PROFILE', 'SENSORS_SURFACE_FAN', 'IWLMLD',
+   'SND_SOC_RT1320_SDW', 'SND_SOC_RT721_SDCA_SDW')
+GENERIC['SERIAL_8250_RUNTIME_UARTS'] = '4'
 # Laptop platform drivers (hotkeys, rfkill, fan/thermal, battery thresholds). The vendor menus gate the drivers.
 _y('X86_PLATFORM_DEVICES', 'X86_PLATFORM_DRIVERS_DELL', 'X86_PLATFORM_DRIVERS_HP', 'ACPI_VIDEO', 'RFKILL_INPUT')
 _m('INTEL_PMT_TELEMETRY', 'INTEL_PMT_CLASS')
@@ -110,7 +125,7 @@ _m('SND_SOC_SOF_PCI', 'SND_SOC_SOF_ACPI', 'SND_SOC_SOF_INTEL_COMMON', 'SND_SOC_S
    'SND_SOC_INTEL_SOUNDWIRE_SOF_MACH', 'SND_SOC_INTEL_SOF_RT5682_MACH', 'SND_SOC_INTEL_SOF_SSP_AMP_MACH',
    'SND_SOC_INTEL_SOF_CS42L42_MACH', 'SND_SOC_INTEL_SOF_ES8336_MACH', 'SND_SOC_INTEL_SOF_NAU8825_MACH',
    'SND_SOC_INTEL_SOF_DA7219_MACH', 'SND_SOC_INTEL_SOF_PCM512x_MACH', 'SND_SOC_INTEL_SOF_CIRRUS_COMMON',
-   'SND_SOC_INTEL_HDA_DSP_COMMON', 'SND_SOC_DMIC', 'SND_SOC_HDAC_HDMI', 'SND_SOC_RT5682_I2C', 'SND_SOC_RT5682_SDW',
+   'SND_SOC_INTEL_HDA_DSP_COMMON', 'SND_SOC_INTEL_SKL_HDA_DSP_GENERIC_MACH', 'SND_SOC_DMIC', 'SND_SOC_HDAC_HDMI', 'SND_SOC_RT5682_I2C', 'SND_SOC_RT5682_SDW',
    'SND_SOC_RT711_SDW', 'SND_SOC_RT711_SDCA_SDW', 'SND_SOC_RT715_SDW', 'SND_SOC_RT1308_SDW', 'SND_SOC_RT1316_SDW',
    'SND_SOC_RT1318_SDW', 'SND_SOC_RT712_SDCA_SDW', 'SND_SOC_RT722_SDCA_SDW', 'SND_SOC_MAX98357A', 'SND_SOC_MAX98373_I2C',
    'SND_SOC_MAX98390', 'SND_SOC_CS42L42', 'SND_SOC_ES8336', 'SND_SOC_NAU8825', 'SND_SOC_DA7219', 'SND_SOC_RT1011',

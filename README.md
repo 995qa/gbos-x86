@@ -5,7 +5,7 @@
 
 Google's **Googlebook OS** (the `lapis` Android desktop build) running on an ordinary laptop: a
 **Dell Latitude 5300** (Intel i5-8365U "Whiskey Lake", UHD 620, 16 GB). It boots from a USB stick or
-from the internal NVMe, reaches the desktop, and runs Play Store apps.
+from the internal NVMe/eMMC, reaches the desktop, and runs Play Store apps.
 
 **Website and community:** https://gbos86.com (guides, hardware list, forum) | Discord: https://discord.gg/h9AD9fSnDT
 
@@ -21,13 +21,29 @@ stored in this repository: the script downloads Google's public recovery image i
 
 ```sh
 git clone https://github.com/linuxkid473/gbos-x86 && cd gbos-x86
-./build.sh                      # asks before downloading; writes dist/gbOS86-YYYYMMDD.img (6.7 GB)
-# flash it: balenaEtcher / Rufus, or  sudo dd if=dist/gbOS86-*.img of=/dev/rdiskN bs=4m
+./build.sh
 ```
-Then boot the laptop from the stick (F12), turn Secure Boot off, and choose **1** (live, nothing is written to the laptop).
-`./build.sh --dry-run` shows what it would download (Google's 7.7 GB image, ~1 MB busybox, 14 MB of kernel modules and 53 MB of firmware
+
+When you run `./build.sh`, it prompts you to select the image type:
+1. **Standard image (`dist/gbOS86-YYYYMMDD.img`)**: Live USB installer. Boots into the 10-second gbOS86 boot menu (`MODE=ask`), allowing you to run live in RAM or install/update on the internal SSD.
+2. **Loopback persistent image (`dist/gbOS86-looper-YYYYMMDD.img`)**: Portable standalone OS. Boots directly into Android (`MODE=boot`) with persistent ext4 `/metadata` and `/data`. All installed apps, accounts, and settings persist directly on the USB stick.
+
+You can also pass CLI arguments directly:
+```sh
+./build.sh --standard
+./build.sh --looper --data-size 64     # 64 GB sparse userdata (only ~6.5 GB on host disk)
+```
+
+Then flash the generated `.img` file from `dist/`:
+```sh
+# Flash with balenaEtcher, Rufus, or dd:
+sudo dd if=dist/gbOS86-*.img of=/dev/rdiskN bs=4m status=progress
+```
+Boot the laptop from the stick (**F12** at the logo, Secure Boot off).
+
+`./build.sh --dry-run` shows what it would download (Google's 7.7 GB image, ~1 MB busybox, 14 MB of kernel modules and 70 MB of firmware
 from this repo's [release](https://github.com/linuxkid473/gbos-x86/releases)). It streams only the six partitions it needs out of
-Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download. Thirteen machines have been
+Google's zip, so the 19 GB disk image inside is never unpacked. Allow 30 to 60 minutes, mostly the download. Eighteen machines have been
 tried (see [Tested laptops](#tested-laptops)); if you try another, please post its `gbos/logs/boot-N/hwdetect.txt` in an issue.
 Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind mounts of this repo's own folders automatically; don't disable SELinux.
 
@@ -35,8 +51,8 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 
 | Works | Notes |
 |---|---|
-| Boot to desktop, setup, Google sign-in | From USB or NVMe |
-| Persistent data | NVMe install: `/data` and `/metadata` are ext4 partitions |
+| Boot to desktop, setup, Google sign-in | From USB or internal NVMe/eMMC |
+| Persistent data | NVMe/eMMC install or USB looper image: `/data` and `/metadata` are ext4 partitions |
 | Wi-Fi | Intel 9560 (CNVi `8086:9df0`) + linux-firmware |
 | Bluetooth | Intel 9560 USB (`8087:0aaa`) via our `btusb` |
 | Sound | Legacy HDA + Realtek ALC3254, speakers, headset jack, internal mic, HDMI |
@@ -54,7 +70,7 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 | Auth-bound keystore keys | `soft_gk`'s auth tokens aren't trusted by the software KeyMint |
 | Google's on-device AI (Magic Pointer, AICore) | Google's servers refuse it without hardware key attestation, which no non-Google laptop can provide |
 | OS updates | Built-in OTA can't work; moving to a new Google build is semi-automated: `tools/port_build.sh`, see [`porting.md`](porting.md) |
-| Other laptops | Five of thirteen tried machines work fully, seven partly or pending, one not; see [Tested laptops](#tested-laptops). The CPU-emulation kernel should help any pre-2021 Intel CPU |
+| Other laptops | Seven of eighteen tried machines work fully, nine partly, one pending, one not; see [Tested laptops](#tested-laptops). The CPU-emulation kernel should help any pre-2021 Intel CPU |
 
 ## How it works
 
@@ -62,12 +78,12 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 UEFI firmware
  └─ EFI/BOOT/BOOTX64.EFI      our kernel (android17-6.18 + patches) with stage0 built in as initramfs
      └─ stage0 (usb/stage0_init.sh, busybox)
-         ├─ finds the gbos volume: USB stick (FAT label GBOS) or NVMe install (GBOSSYS)
+         ├─ finds the gbos volume: USB stick (FAT label GBOS) or system volume (GBOSSYS)
          ├─ loads i915, logs to gbos/logs/boot-N/
-         ├─ MODE=install → gbos/install.sh (NVMe installer/updater), never boots Android
+         ├─ MODE=install → gbos/install.sh (NVMe/eMMC installer/updater), never boots Android
          ├─ mounts super.img's erofs partitions (system, vendor, product, ...) via loop + dm-linear
          ├─ runs gbos/hook.sh (all Android-side workarounds, editable without a kernel rebuild)
-         ├─ mounts /data, /metadata (NVMe ext4, else tmpfs)
+         ├─ mounts /data, /metadata (ext4 partitions if present, else tmpfs)
          └─ switch_root → /system/bin/init selinux_setup   (Google's Android init, unmodified)
 ```
 
@@ -139,7 +155,7 @@ Reports from people who booted the stick (2026-10-18). A row says what was repor
 | Fujitsu Arrows Tab V727 (tablet) | Core m3-7Y30, 8 GB | Partly | Wi-Fi (Intel 8265), Bluetooth, sound card detected (HDA Intel PCH); live USB on kernel #33, USB 2.0 | Tagged "mostly works"; what fails is not listed in the report |
 | Dell XPS 16 (2026) | Intel Core Ultra | Partly | Boots and runs | Screen refresh rate, Wi-Fi, camera. A kernel option reportedly fixes the screen: try it with `MODOPTS` in `gbos.cfg` |
 | Framework Laptop 13 Pro | Core Ultra 5 325 (Panther Lake), 16 GB | Fix pending | Boots | Black screen on sticks without the Panther Lake `xe` firmware (GuC); firmware v35 has it. Awaiting confirmation |
-| Microsoft Surface Laptop 7 (Intel) | Core Ultra 7 266V (Lunar Lake), 16 GB | Fix pending | Boots | Black screen on sticks without the Lunar Lake `xe` firmware (GuC); firmware v35 has it. Built-in keyboard not detected; Wi-Fi, sound unknown. Awaiting logs |
+| Microsoft Surface Laptop 7 (Intel) | Core Ultra 7 266V (Lunar Lake), 16 GB | Partly | Wi-Fi, keyboard, battery, speakers, headset jack, touchpad, Bluetooth | Microphone, HDMI audio, camera, touchscreen, suspend. Needed extra kernel and boot-script work (section below) |
 | HP 14-ne0013dx | Intel | Does not work | | No logs yet |
 
 Pattern: 2017 to 2022 business and mainstream laptops work with little setup (Wi-Fi, Bluetooth, touchpad, display, webcam). The common gap on 10th/11th-gen machines is **sound** (Inspiron 7391, Realme Book Slim), which on those uses the SOF driver; newer Core Ultra machines boot but hit missing firmware (`xe`)
@@ -160,8 +176,8 @@ The kernel (#31) builds drivers for most Intel-era laptops as **modules**, and b
 
 | Area | Covered |
 |---|---|
-| CPU | Anything the ISA-emulation kernel handles: 6th gen (Skylake) and newer; the Googlebook OS needs instructions older CPUs lack, so it is emulated (slow on pre-2021 CPUs) |
-| Graphics / display / brightness | `i915` (Gen9 to Raptor Lake) + ACPI video/backlight; `xe` for newer parts (needs its own firmware, in firmware release v35; the colour/gamma fixes are i915-only) |
+| CPU | Anything the ISA-emulation kernel handles: 6th gen (Skylake) and newer **with AVX** (many Celeron/Pentium/Atom parts have none: init dies on its first instruction, and boot now stops with a message); the Googlebook OS needs instructions older CPUs lack, so it is emulated (slow on pre-2021 CPUs) |
+| Graphics / display / brightness | `i915` (Gen9 to Raptor Lake) + ACPI video/backlight; `xe` for newer parts (needs its own firmware, in firmware release v35; the colour/gamma fixes are i915-only). **AMD Radeon (`amdgpu`): experimental, software rendering only** (CPU-drawn, slow; see below; **untested on hardware**) |
 | Wi-Fi | Intel (`iwldvm`: 7260/7265, `iwlmvm`: 8265 to AX211/BE200), Realtek rtw88/rtw89, MediaTek mt7921/7922/7925, Qualcomm ath10k/ath11k, Broadcom brcmfmac |
 | Bluetooth | `btusb` with Intel/Realtek/MediaTek/Qualcomm/Broadcom, Intel PCIe BT |
 | Sound | Legacy HDA with every common codec, **or** SOF (Intel DSP, DMIC, SoundWire); the kernel picks per machine (`snd_intel_dspcfg`). The audio HAL config is generated for the card that appears (`hook.sh`) |
@@ -169,10 +185,50 @@ The kernel (#31) builds drivers for most Intel-era laptops as **modules**, and b
 | Hotkeys, fans, rfkill | Dell, HP, ThinkPad, IdeaPad, Asus, Acer, Samsung, MSI, Sony, Fujitsu, LG, Intel HID/VBTN |
 | Other | SD card readers (Realtek, SDHCI), USB webcams (UVC), Ethernet (r8169, e1000e, igc, USB r8152 and friends) |
 
-**Honest limits.** Thirteen machines have been booted (below); anything not on that list is built and wired but untested on
+**Honest limits.** Eighteen machines have been booted (below); anything not on that list is built and wired but untested on
 hardware. Sound on SOF machines needs the codec's mixer controls to match the generated config (best effort);
-suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not covered. Build the payload with
+suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD discrete GPUs are not covered. Build the payload with
 `tools/fetch_firmware.sh` (firmware, not committed) and `kernel/isa_emu_patch/build_generic*.sh` (modules, not committed).
+
+## Microsoft Surface Laptop 7 (Intel, Core Ultra 7 266V / Lunar Lake)
+
+Tested on a Surface Laptop for Business 7th Edition with Intel: boots from the stick to the desktop. What works and what it needed
+(the causes and the order they were found in are in HANDOFF.md, 2026-10-18):
+
+| Works | Needs |
+|---|---|
+| Wi-Fi (BE201) | `CONFIG_IWLMLD` |
+| Internal keyboard, battery/charger, fan, platform profile | Surface Aggregator: `kernel/isa_emu_patch/surface_sl7_sam.sh`, `SERIAL_8250_RUNTIME_UARTS=4`, `PINCTRL_INTEL_PLATFORM` (the last two in `configure_whl.py --generic`) |
+| Speakers, headset jack | RT1320 amp + RT721 codec on SoundWire: `python3 kernel/isa_emu_patch/sdw_sl7.py`, firmware `realtek/rt1320/` (`tools/fetch_firmware.sh`), `usb/audio/mixer_paths_surface_laptop_7.xml` |
+| Touchpad with gestures and physical click | `tools/build_surface_tools.sh` (iptsd), `usb/surface/` |
+| Bluetooth | nothing extra |
+| Stable picture (no ghost images or freezes) | `XE_PARAMS="enable_psr=0 enable_fbc=0"` in `gbos.cfg` |
+
+Not working: internal microphone, HDMI audio, camera, touchscreen, suspend/resume. `DEVICE_MODEL="Surface Laptop 7"` in `gbos.cfg` shows
+that name as Model / Device name in Settings. Tests: `tools/test_audio_config.sh`, `tools/test_iptsd_run.sh`, `tools/test_device_model.sh`.
+Credit: nierdal's write-up and patches in linux-surface/linux-surface issue #1710 (SAM entry, SoundWire analysis, touchpad calibration and
+`LiftGraceMs`), and alex-lentz's iptsd fork.
+
+### AMD graphics (experimental, software rendering)
+
+Google's image only has an Intel graphics driver (the Vulkan driver `vulkan.intel.so`, and a gralloc (minigbm) with no `amdgpu` backend), so on a Ryzen
+laptop nothing could draw. When boot finds no Intel GPU and a non-Intel DRM driver bound (the kernel and firmware for `amdgpu` are already
+shipped), `hook.sh` switches to **software rendering**, logged as `hook: software rendering: ...`:
+
+- `usb/patched/vulkan.swiftshader.so` (SwiftShader, a CPU Vulkan driver built for Android by `tools/swiftshader-android/build.sh`; fetched by
+  `build.sh` from the release, 24 MB) is bind-mounted over `/vendor/lib64/hw/vulkan.intel.so`, so ANGLE, Skia and SurfaceFlinger render on the CPU.
+- `usb/patched/libminigbm_gralloc.amdgpu.so` (`tools/patch_gralloc_amdgpu.py`) is bind-mounted over `/vendor/lib64/libminigbm_gralloc.so`
+  (Google's gralloc, minigbm built in): one of its identical generic linear dumb-buffer backends (the ARM-only "komeda" one) now answers to DRM
+  driver `amdgpu`, so gralloc can allocate scanout/render buffers; and Google's "software renderer" flag (lets a CPU Vulkan driver lock buffers that
+  were allocated for the GPU only) is switched on for `ro.hardware.vulkan=intel`. `libgbm.amdgpu.so` does the same for `/vendor/lib64/libgbm.so` (only the
+  camera and video-codec HALs use that one). Each is bound only over the exact original (sha256).
+- Background blur and overlay planes are turned off (`ro.surface_flinger.supports_background_blur=0`, `ro.vendor.hwc.use_overlay_planes=false`):
+  blur is far too slow on the CPU, and the composer's non-Intel backend is untested.
+
+`GPU_SOFTWARE` in `gbos.cfg`: `auto` (default; never changes anything while an Intel GPU is present), `1` (force, for testing on Intel), `0` (never).
+Expect a slow, but working, desktop; use a lower `RESOLUTION` if it crawls. **Never booted on a real AMD laptop**; the AMD CPU side
+(Ryzen) is untested too. `tools/test_gpu_select.sh` tests the decision logic and `tools/swiftshader-android/qemu/run.py` smoke-tests the
+driver inside Google's userspace under QEMU.
 
 ## Repository map
 
@@ -188,6 +244,7 @@ suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not c
 | `usb/audio/` | audio HAL config for the HDA card |
 | `usb/out/BOOTX64.EFI` | **current kernel** (build #30: #29 + gbOS86 boot menu), boots directly from UEFI |
 | `usb/patched/`, `usb/libkm_compat.so` | patched Google libraries; `usb/patched/MANIFEST` (generated) lists each patch with the sha256 of its original |
+| `tools/swiftshader-android/` | builds SwiftShader as Android's Vulkan HAL (docker + NDK) for AMD GPUs |
 | `usb/kmod/` | `btusb`, `btintel`, `btrtl` built for kernel #29 |
 | `usb/installer/` | Alpine `sfdisk`/`mke2fs`/`e2fsck`/`mkfs.fat`/`blkid` + musl (`tools/fetch_installer_tools.sh`) |
 | `usb/firmware/` | Intel Wi-Fi + Bluetooth firmware, `regulatory.db` |
@@ -204,21 +261,29 @@ suspend/resume, fingerprint readers, IPU6 cameras and NVIDIA/AMD dGPUs are not c
 
 ## Using it
 
-### gbOS86 USB image (live + installer)
-`tools/make_gbos86_image.sh` builds `dist/gbOS86-YYYYMMDD.img` (~6.3 GiB) from the repo plus Google's
-extracted partitions (`lapis/parts/*_a.img`). Write it to an 8 GB+ stick with balenaEtcher, Rufus or `dd`.
-Booting it shows the **gbOS86 menu** (10 s timeout): **1** live from the USB (nothing saved), **2** install
-or update on the internal SSD, **3** boot the installed system (offered, and the default, when one exists).
-`MODE` in `gbos/gbos.cfg` skips the menu (`live`, `install`, `boot`; `ask` = menu). The image holds Google's
-OS and patched Google libraries: for your own use only.
+### gbOS86 USB image variants
 
-### Boot from the USB stick
-The stick has two partitions: **`EFI`** (FAT, `EFI/BOOT/BOOTX64.EFI`) and **`GBOS`** (FAT32: `/busybox`,
-`gbos/`). The firmware boots the **EFI partition's** copy. Pick the stick with **F12** at the Dell logo.
+#### 1. Standard Live & Installer Image (`gbOS86-YYYYMMDD.img`)
+- **p1 (`EFI`)**: 256 MiB FAT32 ESP.
+- **p2 (`GBOS`)**: 6 GiB FAT32 (`super.img`, installer, patches).
+Booting shows the **gbOS86 boot menu** with a 10-second timeout:
+- **1) Live from USB** (runs purely in RAM/tmpfs; nothing saved).
+- **2) Install or update on internal SSD** (erases the internal disk and installs gbOS86).
+- **3) Boot the installed system** (offered and default when an internal install exists).
 
-`gbos/` holds: `super.img` + `super.layout`, `hook.sh`, `install.sh`, `apex_patch.sh`, `gbos.cfg`,
-`bootdisk.img`, `crossystem`, `libkm_compat.so`, `system_ext_manifest.xml`, `soft_gk`, and the
-`firmware/`, `patched/`, `audio/`, `installer/`, `kmod/` folders. Logs go to `gbos/logs/boot-N/`.
+#### 2. Looper Persistent Image (`gbOS86-looper-YYYYMMDD.img`)
+Creates a full portable install directly inside the flash drive image, matching the internal disk layout:
+- **p1 (`GBOS_EFI`)**: 512 MiB FAT32 ESP.
+- **p2 (`GBOSSYS`)**: 8 GiB FAT32 (`super.img`, firmware, modules, `MODE=boot`).
+- **p3 (`GBOS_META`)**: 64 MiB ext4 (`/metadata`).
+- **p4 (`GBOS_DATA`)**: User-configured capacity (e.g. 64 GiB) ext4 (`/data`).
+
+> **Sparse capacity on host vs physical drive size:**
+> On the host file system, the image is created as a sparse file: a 64 GB userdata partition only occupies **~150 MB** of ext4 metadata on disk, so the whole `.img` file is only **~6.5 GB** physically.
+> However, when writing directly to a physical USB drive (`dd`), the drive must be large enough to hold all partitions. Choose `--data-size` to match your stick:
+> - **16 GB stick**: `--data-size 6`
+> - **32 GB stick**: `--data-size 20`
+> - **64 GB+ stick**: `--data-size 64` (default)
 
 ### Install to the internal disk (NVMe, eMMC or SATA)
 Set `MODE=install` in `gbos/gbos.cfg` and boot the stick. The target is the internal NVMe or **eMMC** disk (an eMMC is
@@ -233,17 +298,13 @@ Minimum disk size 24 GB. eMMC controllers on the PCI bus work (`sdhci-pci`); ACP
   `GBOS_META` 64M ext4, `GBOS_DATA` rest ext4. Every copied file is sha256-verified.
 - **gbos already installed:** it asks **1) Update** (keeps data, copies new files and kernel, and saves the
   install's last 3 boots of logs to the stick), **2) Reinstall** (erase; still asks for the serial) or
-  **3) Only save its logs** (read-only on the NVMe, takes seconds; `LOG_BOOTS=N` in `gbos.cfg` = how many boots).
-
-The installed system boots normally without the stick. With the stick plugged in and `MODE=install`,
-booting the stick always goes to that menu.
+  **3) Only save its logs** (read-only on the NVMe, takes seconds).
 
 ### Debugging workflow
-The installed system writes logs to its own `GBOSSYS` partition. To read them, boot the stick, choose
+The system writes logs to its own `GBOSSYS` (or `GBOS`) partition. To read them, boot the stick, choose
 menu **2**, then **3 (Only save its logs)** (or 1 to update too), and read `gbos/logs/boot-N/nvme-logs/` on the stick from a computer. Each boot dir has
-`kmsg.log`, `stage0-dmesg.txt` (look for `hook:` lines), rotated `logcat.txt*` (oldest = highest
-number), `crash.txt`, `hw.txt`, `audio.txt`, and `pstore-prev/` (the previous boot's kernel panic, if
-any). FAT has no journal: shut down from Android's power menu, not the power button.
+`kmsg.log`, `stage0-dmesg.txt`, rotated `logcat.txt*`, `crash.txt`, `hw.txt`, `audio.txt`, and `pstore-prev/`.
+FAT has no journal: always shut down from Android's power menu, not the physical power button.
 
 ### Display size
 Density stays Google's stock 260. `RESOLUTION=2400x1350` in `gbos.cfg` makes Android render at a larger
@@ -273,7 +334,11 @@ Needs macOS or Linux with docker, python3, qemu (for tests) and ~30 GB free. The
    `i915_edp_colorspace.sh` (eDP always gets default colorimetry; BT.2020 made the panel pale) and
    `i915_edp_no_colorspace.sh` (no Colorspace property on eDP at all, from kernel #25) and
    `i915_edp_full_range.sh` (eDP always full-range RGB, from kernel #27) and `i915_ignore_gamma.sh`
-   (ignore userspace gamma/degamma/CTM: the HWC loads an xe LOG_GAMMA_LUT curve into GAMMA_LUT, kernel #29).
+   (ignore userspace gamma/degamma/CTM: the HWC loads an xe LOG_GAMMA_LUT curve into GAMMA_LUT, kernel #29), and
+   `kernel/isa_emu_patch/debug_selinux.sh` (the `gbos_permissive` parameter of the kernel command line: without it the
+   kernel is not permissive, Android's init enforces SELinux and the boot stops right after "init: Loading SELinux policy").
+   For the Surface Laptop 7 (Intel) also `kernel/isa_emu_patch/surface_sl7_sam.sh` and `python3 kernel/isa_emu_patch/sdw_sl7.py`
+   (see HANDOFF.md); both only touch modules.
 6. **Build:** `kernel/isa_emu_patch/build.sh` (in `gbos-kbuild`), then `make modules_install` into
    `usb/modroot`, then `usb/make_initramfs.py usb/modroot usb/stage0.cpio`, copy it to
    `/build/out/gbos_stage0.cpio`, and build again so it's embedded. `arch/x86/boot/bzImage` is
