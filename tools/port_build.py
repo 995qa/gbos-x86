@@ -263,18 +263,6 @@ def anchors(root):
                 if re.search(r'^service %s\b' % svc, open(rc, errors='replace').read(), re.M):
                     hit = True
         need(hit, 'service %s is defined (gbos.rc starts it in early-fs)' % svc, 'start of an undefined service is ignored: KeyMint may never get its VM')
-    # optional AI stand-in (localai/): the AICore stub it replaces and the Magic Pointer it patches live in product
-    if os.path.isdir(os.path.join(root, 'product')):
-        aic = glob.glob(os.path.join(base(root, 'product'), 'priv-app/AICorePrebuilt*/*.apk'))
-        need(bool(aic), 'product has priv-app/AICorePrebuilt*/*.apk (hook.sh binds localai.apk over it)', 'LOCAL_AI=1 would log "nothing to do"; usb/localai/prep.sh also names this path')
-        gp = glob.glob(os.path.join(base(root, 'product'), 'priv-app/ContextualCursorPrebuilt/*.apk'))
-        if not gp:
-            need(False, 'product has priv-app/ContextualCursorPrebuilt/*.apk (Magic Pointer)', 'localai/build_gpointer.sh extracts it from this path')
-        else:
-            rc, txt = run([PY, '-I', os.path.join(ROOT, 'localai', 'patch_gpointer.py'), '--check', gp[0]])
-            note('OK' if rc == 0 else 'FAIL', 'Magic Pointer capability patch site: %s' % (txt.splitlines()[-1][-110:] if txt else rc))
-    else:
-        note('INFO', 'product not extracted: AICore / Magic Pointer paths not checked (run tools/port_build.sh --product)')
     # sepolicy domains gbos.rc names in seclabel lines are checked on the device (init refuses unknown labels): list them for a human
     note('INFO', 'anchor: not checkable here: SELinux types used by gbos.rc (u:r:shell:s0, u:r:hal_gatekeeper_default:s0), the dm/loop setup in stage0 and '
          'first-stage init expectations. Boot once and read stage0-dmesg.txt')

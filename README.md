@@ -52,7 +52,7 @@ Fedora/RHEL with SELinux enforcing: the scripts add `:z` to the docker bind moun
 | Night Light | Gamma tables from userspace are ignored (that's the colour fix), so it has no effect |
 | Linux Terminal (AVF) | Secretkeeper hang fixed; VM boot not yet confirmed |
 | Auth-bound keystore keys | `soft_gk`'s auth tokens aren't trusted by the software KeyMint |
-| Google's on-device AI (Magic Pointer, AICore) | Google's servers refuse it without hardware key attestation, which no non-Google laptop can provide. Optional replacement, chosen in the installer: the AI features answer through an OpenAI-compatible API **you** provide (address, key, model; a Gemini API key works). Text and pictures you point at go to that provider; see [`localai/README.md`](localai/README.md) (**experimental, not yet confirmed on hardware**) |
+| Google's on-device AI (Magic Pointer, AICore) | Google's servers refuse it without hardware key attestation, which no non-Google laptop can provide |
 | OS updates | Built-in OTA can't work; moving to a new Google build is semi-automated: `tools/port_build.sh`, see [`porting.md`](porting.md) |
 | Other laptops | Five of thirteen tried machines work fully, seven partly or pending, one not; see [Tested laptops](#tested-laptops). The CPU-emulation kernel should help any pre-2021 Intel CPU |
 

@@ -11,7 +11,6 @@ rm -rf lapis/parts && ./build.sh --dry-run   # build.sh downloads the new recove
 tools/port_build.sh --isa           # DRY RUN: re-patch, check anchors, scan for unsupported instructions. Touches nothing.
 tools/port_build.sh --write --product   # when it says 0 FAIL: writes usb/patched/*, usb/libkm_compat.so, usb/system_ext_manifest.xml, usb/patched/MANIFEST
 sh tools/test_port_scripts.sh       # the boot scripts' patch logic under the stick's busybox: PORT_SCRIPTS_PASS
-localai/build_gpointer.sh           # only if you ship the AI stand-in: re-patches Magic Pointer for the new build
 tools/deploy_stick.sh               # then boot the stick, choose 1 (Update), read stage0-dmesg.txt (below)
 ```
 
@@ -29,7 +28,6 @@ and the scripts on the stick read [`usb/patched/MANIFEST`](usb/patched/MANIFEST)
 | `libcrypto.so` (system, vendor, every APEX copy of the Conscrypt hash): SHA-NI block functions jump to the scalar ones | `tools/sha_redirect.py` | every `sha*` instruction, back to the function prologue, and the scalar sibling's prologue | exit 3 with `UNMATCHED`; add the new prologue to `FAMILIES` |
 | `libkm_compat.so`: software KeyMint for every security level | `tools/patch_km_compat.py` | the exported `KeystoreCompatService::getKeyMintDevice` symbol, the first `mov %edx,%reg` in its prologue becomes `xor reg,reg` | exit 3; disassemble `getKeyMintDevice`, the level is argument 2 (`edx`) |
 | `system_ext_manifest.xml`: VINTF without the Trusty KeyMint/RKP/SecureClock `<hal>`s | `port_build.py` | removes those three blocks from Google's own manifest, so it is always in sync with the build | WARN names the HAL that is no longer declared |
-| Magic Pointer capability check (AI stand-in only) | `localai/patch_gpointer.py` | the one `sget-object` of `TEXT_QUERY_WITH_ATTACHMENTS_CAPABILITY` in `ErrorsKt.<clinit>` | refuses; read `ErrorsKt.requiredCapabilities` in jadx |
 
 On the device, `hook.sh` (`gbos_bind_patches`), `early_patch.sh` and `apex_patch.sh` bind a patched file only over a file whose sha256 is
 the one recorded in the MANIFEST, so a stale patch is never bound over a different library. They now log why when they do not:

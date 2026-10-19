@@ -58,10 +58,3 @@ __pycache__/
 # one-command build downloads
 /build/
 
-# gbOS86 local AI build products: toolchain, llama.cpp checkout, APK/binary output (see localai/README.md)
-/localai/.toolchain/
-*.gguf
-
-# Patched copy of Google's Magic Pointer app (localai/build_gpointer.sh): Google's binary, 235 MB, built locally, never committed
-/usb/localai/gpointer.apk
-/usb/localai/api.conf

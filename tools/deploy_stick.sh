@@ -1,6 +1,5 @@
 #!/bin/sh
-# Fast deploy to a mounted gbOS86 stick: copies only the files that differ from usb/ (small scripts, patches, the AI app and,
-# if built, localai/gpointer.apk), removes files the project no longer ships, verifies every copied file after a remount, ejects.
+# Fast deploy to a mounted gbOS86 stick: copies only the files that differ from usb/ (small scripts and patches), removes files the project no longer ships, verifies every copied file after a remount, ejects.
 # Takes seconds. It never touches the big/rarely changing items (super.img, firmware/, modules/, bootdisk.img), the kernel
 # (EFI partition) or the stick's own gbos.cfg; use build.sh / the image for those.
 # Usage: tools/deploy_stick.sh [--no-eject] [VOLUME]      (VOLUME defaults to /Volumes/GBOS)
@@ -25,14 +24,12 @@ put() {  # put SRC DST(relative to gbos/): copy when different
 
 echo "deploying to $VOL"
 for f in hook.sh install.sh aidiag.sh early_patch.sh hwdetect.sh apex_patch.sh crossystem libkm_compat.so system_ext_manifest.xml soft_gk; do put "$U/$f" "$f"; done
-for d in patched audio installer kmod localai; do
+for d in patched audio installer kmod; do
   [ -d "$U/$d" ] || continue
-  (cd "$U" && find "$d" -type f ! -name '.DS_Store' ! -name 'api.conf' ! -name '*.gguf') | while read -r f; do put "$U/$f" "$f"; done
+  (cd "$U" && find "$d" -type f ! -name '.DS_Store') | while read -r f; do put "$U/$f" "$f"; done
 done
-# the stick's files that this project no longer ships (old local-model version)
-for f in localai/run.sh localai/llama-server localai/model.gguf localai/mmproj.gguf; do
-  [ -e "$G/$f" ] && { printf '  removing %s\n' "$f"; rm -f "$G/$f"; }
-done
+# the stick's files that this project no longer ships (the removed AI stand-in)
+[ -d "$G/localai" ] && { printf '  removing localai/\n'; rm -rf "$G/localai"; }
 [ -s "$CHANGED" ] || echo "  nothing to copy: the stick already matches usb/"
 sync
 

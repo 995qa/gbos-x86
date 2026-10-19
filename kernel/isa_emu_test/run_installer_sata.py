@@ -166,7 +166,7 @@ def untouched(p):
     return head == b'D' * 480 and os.stat(p).st_blocks * 512 < MIB and gpt(p) is None
 
 stick = work / 'stick.img'
-cfg_install = 'MODE=install\nLOAD_I915=0\nLOCAL_AI=0\n'
+cfg_install = 'MODE=install\nLOAD_I915=0\n'
 
 print('== 1. wrong serial: must cancel and write nothing')
 make_stick(stick, cfg_install)
@@ -212,7 +212,7 @@ if parts:
 
 print('== 3. update of the installed copy')
 if parts:
-    make_stick(stick, 'MODE=install\nLOAD_I915=0\nLOCAL_AI=0\nACTION=update\n',
+    make_stick(stick, 'MODE=install\nLOAD_I915=0\nACTION=update\n',
                lambda G: (G / 'hook.sh').write_bytes(b'# changed on the stick, update must copy this\n'))
     txt, ok = qemu(stick, emmc_q, 'gbos_install_confirm=update-test', r'Update done\.', 900, 'update')
     check(ok, 'update completed')
