@@ -80,4 +80,14 @@ GPU_VULKAN=swiftshader; rv "forced SwiftShader" swiftshader
 GPU_VULKAN=radv; rv "forced RADV" radv; unset GPU_VULKAN
 mk "card0:nouveau" "$NV"; SYSFS=$T/sys; rv "other GPU driver, RADV present" swiftshader
 mk "card0:amdgpu" "$AMD"; SYSFS=$T/sys; FAKE_VK_SHA=deadbeef; rv "unknown vulkan.intel.so" none; unset FAKE_VK_SHA
+# vendor build.prop rewrite: in software-GPU mode Google's enable_color_pipeline=true must become false (drm_hwcomposer rejects every amdgpu plane otherwise)
+sed -n '/^DROP=/,/^} > \/tmp\/vendor.build.prop/p' "$HOOK" | sed "s#/new/vendor/build.prop#$T/vendor.build.prop#g; s#/tmp/vendor.build.prop#$T/out.prop#g; s#^} > .*#}#" > "$T/prop.sh"
+bp() { # name GPU_SW expected(enable_color_pipeline in the result)
+  n=$((n+1)); printf 'vendor.hwc.drm.enable_color_pipeline=true\nvendor.hwc.use_log_gamma_lut=true\nro.sf.lcd_density=260\n' > "$T/vendor.build.prop"; rm -f "$T/out.prop"
+  ( GPU_SW=$2; DENSITY=; DEVICE_MODEL=; . "$T/prop.sh" > "$T/out.prop" ) 2>/dev/null
+  r=$(grep '^vendor.hwc.drm.enable_color_pipeline=' "$T/out.prop" | tr '\n' ' ')
+  if [ "$r" = "vendor.hwc.drm.enable_color_pipeline=$3 " ]; then echo "ok   build.prop: $1 -> color_pipeline=$3"; else echo "FAIL build.prop: $1: got '$r'"; cat "$T/out.prop"; fails=$((fails+1)); fi
+}
+bp "software GPU mode (AMD)" 1 false
+bp "Intel (stock, unchanged)" 0 true
 [ $fails = 0 ] && echo "GPU_SELECT_TEST_PASS ($n checks)" || { echo "$fails FAILED"; exit 1; }

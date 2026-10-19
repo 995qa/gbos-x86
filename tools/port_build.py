@@ -253,7 +253,7 @@ def anchors(root):
     n = grep_count(root, 'vendor', 'etc/fstab.android-desktop', 'voldmanaged=usb', regex=True)
     need(bool(n), 'fstab has a voldmanaged=usb rule (hook.sh removes it so vold leaves the stick alone; found %s)' % n,
          'if vold now manages USB differently the stick may get fsck_msdos again (lost/truncated logs)')
-    for key in ('ro.boot.hypervisor.protected_vm.supported=1', 'ro.surface_flinger.has_wide_color_display=', 'ro.surface_flinger.has_HDR_display=', 'ro.sf.lcd_density='):
+    for key in ('ro.boot.hypervisor.protected_vm.supported=1', 'ro.surface_flinger.has_wide_color_display=', 'ro.surface_flinger.has_HDR_display=', 'ro.sf.lcd_density=', 'vendor.hwc.drm.enable_color_pipeline=true'):
         n = grep_count(root, 'vendor', 'build.prop', '^' + re.escape(key), regex=True)
         need(bool(n), 'vendor build.prop sets %s' % key, 'hook.sh filters/overrides it')
     for svc in ('trusty_security_protected_vm_launcher',):
