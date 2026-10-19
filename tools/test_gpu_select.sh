@@ -65,4 +65,19 @@ rm $G/patched/vulkan.swiftshader.so
 runenable "no SwiftShader HAL on the stick" 1 1 0 0
 : > $G/patched/vulkan.swiftshader.so; MOUNT_RC=1; runenable "bind fails" 1 1 1 0; unset MOUNT_RC
 
+# RADV: used when it is on the stick and amdgpu is bound; GPU_VULKAN forces either; falls back to SwiftShader when RADV cannot be bound
+radvmount() { grep -q "vulkan.radv.so" "$T/mounts" 2>/dev/null && echo radv || { grep -q "vulkan.swiftshader.so" "$T/mounts" 2>/dev/null && echo swiftshader || echo none; }; }
+rv() { # name expected GPU_VULKAN
+  n=$((n+1)); runenable_quiet; r=$(radvmount)
+  if [ "$r" = "$2" ]; then echo "ok   vulkan: $1 -> $r"; else echo "FAIL vulkan: $1: wanted $2, got $r"; cat "$T/log"; fails=$((fails+1)); fi
+}
+runenable_quiet() { rm -f "$T/log" "$T/mounts"; GPU_SW=1; gbos_gpu_enable; }
+mk "card0:amdgpu" "$AMD"; SYSFS=$T/sys; : > $G/patched/vulkan.swiftshader.so
+rv "amdgpu, no RADV on the stick" swiftshader
+: > $G/patched/vulkan.radv.so
+rv "amdgpu + RADV on the stick" radv
+GPU_VULKAN=swiftshader; rv "forced SwiftShader" swiftshader
+GPU_VULKAN=radv; rv "forced RADV" radv; unset GPU_VULKAN
+mk "card0:nouveau" "$NV"; SYSFS=$T/sys; rv "other GPU driver, RADV present" swiftshader
+mk "card0:amdgpu" "$AMD"; SYSFS=$T/sys; FAKE_VK_SHA=deadbeef; rv "unknown vulkan.intel.so" none; unset FAKE_VK_SHA
 [ $fails = 0 ] && echo "GPU_SELECT_TEST_PASS ($n checks)" || { echo "$fails FAILED"; exit 1; }

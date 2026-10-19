@@ -226,6 +226,13 @@ shipped), `hook.sh` switches to **software rendering**, logged as `hook: softwar
 - Background blur and overlay planes are turned off (`ro.surface_flinger.supports_background_blur=0`, `ro.vendor.hwc.use_overlay_planes=false`):
   blur is far too slow on the CPU, and the composer's non-Intel backend is untested.
 
+**RADV (real GPU rendering, experimental).** `tools/radv-android/build.sh` cross-builds Mesa 25.0.7's AMD Vulkan driver (RADV, no LLVM) for Android with the
+NDK in docker (about 10 minutes after the downloads) and writes `build/radv/vulkan.radv.so` (13 MB; an Android Vulkan HAL: exports `HMI`, needs only
+`libcutils/liblog/libnativewindow/libsync/libz` + bionic). Copy it to `usb/patched/`; with `GPU_VULKAN=auto` (default) `hook.sh` then binds it over
+`vulkan.intel.so` instead of SwiftShader when `amdgpu` is bound (`GPU_VULKAN=swiftshader` goes back). **It has only been built and checked as an ELF
+(`tools/test_gpu_select.sh` tests the choice); it has never run on a Radeon.** Likely trouble: buffers shared between gralloc (linear dumb buffers)
+and RADV, the composer on AMD, and SELinux/permissions on `/dev/dri/renderD128`.
+
 `GPU_SOFTWARE` in `gbos.cfg`: `auto` (default; never changes anything while an Intel GPU is present), `1` (force, for testing on Intel), `0` (never).
 Expect a slow, but working, desktop; use a lower `RESOLUTION` if it crawls. **Never booted on a real AMD laptop**; the AMD CPU side
 (Ryzen) is untested too. `tools/test_gpu_select.sh` tests the decision logic and `tools/swiftshader-android/qemu/run.py` smoke-tests the
