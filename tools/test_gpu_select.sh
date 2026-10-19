@@ -89,5 +89,10 @@ bp() { # name GPU_SW expected(enable_color_pipeline in the result)
   if [ "$r" = "vendor.hwc.drm.enable_color_pipeline=$3 " ]; then echo "ok   build.prop: $1 -> color_pipeline=$3"; else echo "FAIL build.prop: $1: got '$r'"; cat "$T/out.prop"; fails=$((fails+1)); fi
 }
 bp "software GPU mode (AMD)" 1 false
+n=$((n+1)); printf 'ro.hwui.use_vulkan=true\nvendor.hwc.drm.enable_color_pipeline=true\n' > "$T/vendor.build.prop"
+( GPU_SW=1; DENSITY=; DEVICE_MODEL=; . "$T/prop.sh" > "$T/out.prop" ) 2>/dev/null
+if [ "$(grep -c '^ro.hwui.use_vulkan=' "$T/out.prop")" = 1 ] && grep -q '^ro.hwui.use_vulkan=false$' "$T/out.prop"; then echo "ok   build.prop: software GPU mode -> ro.hwui.use_vulkan=false (once)"; else echo "FAIL build.prop hwui"; cat "$T/out.prop"; fails=$((fails+1)); fi
+n=$((n+1)); printf 'ro.hwui.use_vulkan=true\n' > "$T/vendor.build.prop"; ( GPU_SW=0; DENSITY=; DEVICE_MODEL=; . "$T/prop.sh" > "$T/out.prop" ) 2>/dev/null
+if grep -q '^ro.hwui.use_vulkan=true$' "$T/out.prop"; then echo "ok   build.prop: Intel keeps ro.hwui.use_vulkan=true"; else echo "FAIL build.prop hwui Intel"; fails=$((fails+1)); fi
 bp "Intel (stock, unchanged)" 0 true
 [ $fails = 0 ] && echo "GPU_SELECT_TEST_PASS ($n checks)" || { echo "$fails FAILED"; exit 1; }

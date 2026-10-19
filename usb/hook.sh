@@ -391,7 +391,7 @@ fi
 # kernel side is fixed in i915_edp_colorspace.sh). Declare it sRGB-only.
 case "$DENSITY" in ''|*[!0-9]*) DENSITY=;; esac
 DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_color_display=|^ro.surface_flinger.has_HDR_display='
-[ "$GPU_SW" = 1 ] && DROP="$DROP|^ro.surface_flinger.supports_background_blur=|^ro.vendor.hwc.use_overlay_planes=|^vendor.hwc.drm.enable_color_pipeline="   # blur on the CPU is far too slow
+[ "$GPU_SW" = 1 ] && DROP="$DROP|^ro.surface_flinger.supports_background_blur=|^ro.vendor.hwc.use_overlay_planes=|^vendor.hwc.drm.enable_color_pipeline=|^ro.hwui.use_vulkan="   # blur on the CPU is far too slow
 [ -n "$DENSITY" ] && DROP="$DROP|^ro.sf.lcd_density="
 [ -n "$DEVICE_MODEL" ] && DROP="$DROP|^ro.product.model=|^ro.product.vendor.model=|^ro.product.marketname=|^ro.product.vendor.marketname="
 { grep -v -E "$DROP" /new/vendor/build.prop
@@ -407,6 +407,11 @@ DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_c
     # "Primary plane for CRTC not found", "No pipelines available. Creating null-display for headless mode": SurfaceFlinger draws into
     # nothing, black screen). amdgpu's planes (kernel 6.18) have none. Seen on a Ryzen 3 3350U, logcat boot-6.
     echo "vendor.hwc.drm.enable_color_pipeline=false"
+    # Apps (HWUI) otherwise draw with Vulkan directly and abort at start-up on a driver with one queue per family:
+    # "Assertion failed: queueProps[i].queueFamilyProperties.queueCount < kRequestedQueueCount" (SIGABRT in RenderThread of setupwizard,
+    # systemui, launcher, 300+ times; SwiftShader reports queueCount=1, RADV too). OpenGL ES through ANGLE (-> the same Vulkan driver) is
+    # what SurfaceFlinger already uses successfully here. Seen on the Ryzen 3 3350U, second logs.
+    echo "ro.hwui.use_vulkan=false"
   fi
   if [ -n "$DENSITY" ]; then echo "ro.sf.lcd_density=$DENSITY"; fi
   if [ -n "$DEVICE_MODEL" ]; then
