@@ -89,7 +89,7 @@ else
   fi
 fi
 
-# --- software rendering for GPUs Google's image has no driver for (AMD) -- gbos_gpu_* functions ---
+# --- GPU driver selection: Intel as is, NVIDIA (nouveau + Mesa's GL), everything else: software rendering ---
 # Google's image renders through ANGLE -> Vulkan, and its only Vulkan driver is Intel's ANV (/vendor/lib64/hw/vulkan.intel.so);
 # buffers come from minigbm (gralloc, /vendor/lib64/libminigbm_gralloc.so), which has no amdgpu backend. On a laptop whose GPU
 # is not Intel's, "software GPU" mode swaps in (a) SwiftShader, a CPU Vulkan driver, over vulkan.intel.so (ro.hardware.vulkan=intel
@@ -97,6 +97,14 @@ fi
 # lets the CPU driver lock any buffer (tools/patch_gralloc_amdgpu.py; likewise libgbm.so, tools/patch_libgbm_amdgpu.py).
 # GPU_SOFTWARE in gbos.cfg: auto (default: only when no Intel GPU is present and another GPU driver is bound), 1 (force, even
 # on Intel), 0 (never). SYSFS= and NEWROOT= are only for tools/test_gpu_select.sh.
+#
+# NVIDIA is a different case: NVIDIA has no open Vulkan driver at all, so ANGLE/Vulkan cannot be used.
+# The only open 3D path is Mesa's gallium "nouveau" driver (GL/GLES), built for Android by
+# tools/mesa-android/build.sh and put on the stick as gbos/mesa/. When the display is on an NVIDIA card, hook.sh
+# installs Mesa's EGL/GLES in /vendor/lib64/egl (the EGL loader looks for libEGL_<ro.hardware.egl>.so there and
+# skips ANGLE when ro.hardware.egl is not "angle"), so apps, SurfaceFlinger and HWUI all draw with the NVIDIA GPU.
+# GPU_NVIDIA in gbos.cfg: auto (default: when the display is on an NVIDIA card), 1 (force, even with an Intel GPU
+# present), 0 (never).
 GBOS_GRALLOC_SHA=d48536951fd0e9643e71a5c8843e90833ce3e212e182782185470e2fbbfad673
 GBOS_LIBGBM_SHA=64a0f2537a5917822cb3f538dc74229e7ccf4ca45a30265bb97f742678ba294e
 GBOS_VKINTEL_SHA=5c687450523ea9ed9e8d4d9cc98ef4fef6c8d592d46db4bf425ad571dc6f7c73
@@ -119,38 +127,115 @@ gbos_gpu_intel_pci() {
   done
   return 1
 }
-# Sets GPU_SW=1 (software rendering wanted) or 0 and logs why. $1 = seconds to wait for a non-Intel driver to bind.
+# The same for NVIDIA (vendor 0x10de): a laptop can have an Intel iGPU and an NVIDIA card, and only the
+# card the display is on is used.
+gbos_gpu_nvidia_pci() {
+  for d in ${SYSFS:-/sys}/bus/pci/devices/*; do
+    [ -e "$d/class" ] || continue
+    case "$(cat $d/class)" in 0x03*) [ "$(cat $d/vendor)" = 0x10de ] && return 0;; esac
+  done
+  return 1
+}
+# The card the display is on: the one with a connected connector (the panel or a plugged-in monitor). On a hybrid
+# laptop the panel is on the Intel GPU and the NVIDIA card has no connector, so this is what tells the two apart.
+gbos_gpu_display_card() {
+  for c in ${SYSFS:-/sys}/class/drm/card*-*; do
+    [ -e "$c/status" ] || continue
+    [ "$(cat $c/status 2>/dev/null)" = connected ] || continue
+    b=${c##*/}; echo "${b%%-*}"   # card0-eDP-1 -> card0
+    return 0
+  done
+  return 1
+}
+# Install Mesa's EGL/GLES where Android's EGL loader looks for a native driver: /vendor/lib64/egl/.
+# The loader takes the name from ro.hardware.egl (libEGL_mesa.so, libGLESv1_CM_mesa.so, libGLESv2_mesa.so) and
+# only then uses ANGLE, so with ro.hardware.egl=mesa the whole system uses Mesa (nouveau) instead of ANGLE.
+# /vendor is a read-only erofs without an egl/ directory, so /vendor/lib64 is overlaid with a tmpfs that has the
+# original files bind-mounted back and egl/ (plus libgallium_dri.so and libgbm.so.1) added.
+# Returns 1 (and logs) when Mesa is not on the stick or the overlay fails.
+gbos_gpu_mesa_install() {
+  M=$G/mesa
+  for f in libEGL_mesa.so libGLESv1_CM_mesa.so libGLESv2_mesa.so libgallium_dri.so libgbm.so.1; do
+    [ -f "$M/$f" ] || { log "hook: nvidia: gbos/mesa/$f missing (Mesa's EGL is not on the stick: no 3D accel)"; return 1; }
+  done
+  V=${NEWROOT:-/new}/vendor/lib64
+  O=/tmp/gbos-vendor-egl
+  rm -rf $O; mkdir -p $O/orig $O/new/egl
+  mount --bind $V $O/orig 2>/dev/null || { log "hook: nvidia: cannot read $V"; return 1; }
+  mount -t tmpfs -o mode=0755 tmpfs $O/new 2>/dev/null || { log "hook: nvidia: tmpfs for /vendor/lib64 FAILED"; return 1; }
+  n=0
+  for f in $O/orig/*; do
+    [ -e "$f" ] || continue
+    b=${f##*/}
+    touch "$O/new/$b" 2>/dev/null
+    mount --bind "$f" "$O/new/$b" 2>/dev/null && n=$((n+1))
+  done
+  cp -f $M/libEGL_mesa.so $M/libGLESv1_CM_mesa.so $M/libGLESv2_mesa.so $O/new/egl/ || { log "hook: nvidia: copying Mesa's EGL FAILED"; return 1; }
+  cp -f $M/libgallium_dri.so $M/libgbm.so.1 $O/new/ || { log "hook: nvidia: copying Mesa's driver FAILED"; return 1; }
+  mount --bind $O/new $V || { log "hook: nvidia: bind $O/new -> $V FAILED"; return 1; }
+  log "hook: nvidia: Mesa's EGL/GLES installed in /vendor/lib64/egl ($n vendor files kept)"
+  return 0
+}
+# Sets GPU_SW=1 (software rendering wanted), GPU_NV=1 (nouveau + Mesa's GL) or neither, and logs why.
+# $1 = seconds to wait for a GPU driver to bind.
 gbos_gpu_decide() {
-  GPU_SW=0
+  GPU_SW=0; GPU_NV=0
   case "${GPU_SOFTWARE:-auto}" in
     0) log "hook: software rendering: off (GPU_SOFTWARE=0)"; return 0;;
     1) GPU_SW=1; log "hook: software rendering: on (GPU_SOFTWARE=1, forced)"; return 0;;
   esac
-  w=0; real=; intel=
+  case "${GPU_NVIDIA:-auto}" in
+    0|off) log "hook: nvidia: off (GPU_NVIDIA=0)";;
+    1|mesa) GPU_NV_FORCE=1;;
+  esac
+  w=0; real=; intel=; nv=; disp=
   while :; do
-    real=; intel=
+    real=; intel=; nv=
     for e in $(gbos_gpu_cards | tr ' ' ','); do
       drv=${e#*,}
-      case "$drv" in i915|xe) intel=$drv;; *) gbos_gpu_real "$drv" && real="$real ${e%%,*}:$drv";; esac
+      case "$drv" in
+        i915|xe) intel=$drv;;
+        nouveau) nv=1; real="$real ${e%%,*}:nouveau";;
+        *) gbos_gpu_real "$drv" && real="$real ${e%%,*}:$drv";;
+      esac
     done
+    disp=$(gbos_gpu_display_card)
+    ddrv=; [ -n "$disp" ] && ddrv=$(readlink ${SYSFS:-/sys}/class/drm/$disp/device/driver 2>/dev/null) && ddrv=${ddrv##*/}
+    # The display is on an NVIDIA card: use Mesa's gallium nouveau (the only open 3D path for NVIDIA).
+    [ -n "$ddrv" ] && [ "$ddrv" = nouveau ] && [ -z "${GPU_NV_FORCE:-}" ] && [ "${GPU_NVIDIA:-auto}" != 0 ] && break
+    [ -n "$nv" ] && [ -n "${GPU_NV_FORCE:-}" ] && break
     # Intel (bound, or at least present on the PCI bus): leave everything as it is, whatever else is installed.
-    [ -n "$intel" ] && { log "hook: software rendering: off (auto; Intel GPU driver $intel bound)"; return 0; }
-    gbos_gpu_intel_pci && { log "hook: software rendering: off (auto; Intel display controller present)"; return 0; }
+    [ -n "$intel" ] && break
+    gbos_gpu_intel_pci && ! gbos_gpu_nvidia_pci && break
     [ -n "$real" ] && break
     [ $w -ge ${1:-0} ] && break
     sleep 1; w=$((w+1))
   done
-  if [ -n "$real" ]; then
+  # 1) the display is on the NVIDIA card (or GPU_NVIDIA=1 forces it): Mesa's EGL, the GPU does the 3D.
+  if [ -n "$nv" ] && { [ "$ddrv" = nouveau ] || [ -n "${GPU_NV_FORCE:-}" ]; } && [ "${GPU_NVIDIA:-auto}" != 0 ]; then
+    if gbos_gpu_mesa_install; then
+      GPU_NV=1
+      log "hook: nvidia: nouveau bound (display on ${disp:-none}), Mesa's EGL active: 3D acceleration on the NVIDIA GPU"
+      return 0
+    fi
+    log "hook: nvidia: nouveau bound but Mesa's EGL is not usable: falling back"
+  fi
+  # 2) no Intel GPU and some other driver: software rendering (the CPU draws everything).
+  if [ -z "$intel" ] && ! gbos_gpu_intel_pci && [ -n "$real" ]; then
     GPU_SW=1; log "hook: software rendering: on (auto; no Intel GPU, DRM:$real, after ${w}s)"
+  elif [ -n "$intel" ]; then
+    log "hook: software rendering: off (auto; Intel GPU driver $intel bound)"
+  elif [ -n "$real" ]; then
+    log "hook: software rendering: off (auto; Intel display controller present, DRM:$real)"
   else
     log "hook: software rendering: off (auto; no DRM GPU driver bound after ${w}s; cards: $(gbos_gpu_cards | tr '\n' ';'))"
   fi
 }
 # Bind patched/$2 over $3 when it exists and $3 is the exact original ($4 = its sha256). $1 = what it is, for the log.
 gbos_gpu_bind() {
-  if [ ! -f "$G/patched/$2" ]; then log "hook: software rendering: gbos/patched/$2 missing ($1 not replaced; stick too old?)"; return 1; fi
-  if [ "$(sha256sum "$3" | cut -d' ' -f1)" != "$4" ]; then log "hook: software rendering: $1 NOT replaced (unexpected original, new Google build?)"; return 1; fi
-  mount --bind "$G/patched/$2" "$3" && log "hook: software rendering: $1 replaced" || { log "hook: software rendering: $1 bind FAILED"; return 1; }
+  if [ ! -f "$G/patched/$2" ]; then log "${GBOS_GPU_LOG:-hook: software rendering:} gbos/patched/$2 missing ($1 not replaced; stick too old?)"; return 1; fi
+  if [ "$(sha256sum "$3" | cut -d' ' -f1)" != "$4" ]; then log "${GBOS_GPU_LOG:-hook: software rendering:} $1 NOT replaced (unexpected original, new Google build?)"; return 1; fi
+  mount --bind "$G/patched/$2" "$3" && log "${GBOS_GPU_LOG:-hook: software rendering:} $1 replaced" || { log "${GBOS_GPU_LOG:-hook: software rendering:} $1 bind FAILED"; return 1; }
 }
 # radv or swiftshader: which Vulkan driver to use (GPU_VULKAN=radv|swiftshader forces one; auto = RADV only if the stick has it and amdgpu is bound).
 gbos_gpu_vulkan() {
@@ -172,11 +257,26 @@ gbos_gpu_enable() {
   else gbos_gpu_bind "Vulkan driver (SwiftShader, CPU)" vulkan.swiftshader.so $V/lib64/hw/vulkan.intel.so $GBOS_VKINTEL_SHA || GPU_SW=0
   fi
 }
-# --- end software rendering ---
+# NVIDIA (nouveau): the 3D work is done by the GPU through Mesa's gallium nouveau driver (GL/GLES), so
+# nothing has to be replaced for the graphics itself. Vulkan apps (and anything else that insists on
+# Vulkan) get SwiftShader, the CPU Vulkan driver: NVIDIA has no open Vulkan driver.
+gbos_gpu_nvidia_enable() {
+  V=${NEWROOT:-/new}/vendor
+  gbos_gpu_bind "Vulkan driver (SwiftShader, CPU; NVIDIA has no open Vulkan driver)" vulkan.swiftshader.so \
+    $V/lib64/hw/vulkan.intel.so $GBOS_VKINTEL_SHA \
+    || log "hook: nvidia: no Vulkan driver for Vulkan apps (SwiftShader is not on the stick)"
+}
+# --- end GPU driver selection ---
 
-# Let the DRM driver (amdgpu probes for several seconds and loads ~20 firmware files) finish before deciding.
+# Let the DRM driver (amdgpu/nouveau probe for several seconds and load firmware) finish before deciding.
 gbos_gpu_decide ${GPU_WAIT:-25}
-[ "$GPU_SW" = 1 ] && gbos_gpu_enable
+if [ "$GPU_SW" = 1 ]; then
+  gbos_gpu_enable
+elif [ "$GPU_NV" = 1 ]; then
+  GBOS_GPU_LOG="hook: nvidia:"
+  gbos_gpu_nvidia_enable
+  GBOS_GPU_LOG="hook: software rendering:"
+fi
 
 # drm.debug=0x04 (KMS only; not ATOMIC, which logs every frame): i915 dumps gamma/CSC mode and range per modeset while
 # drm_hwcomposer first sets up the panel. gbos.rc turns it off at boot_completed. Washed-out colours.
@@ -407,6 +507,9 @@ fi
 case "$DENSITY" in ''|*[!0-9]*) DENSITY=;; esac
 DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_color_display=|^ro.surface_flinger.has_HDR_display='
 [ "$GPU_SW" = 1 ] && DROP="$DROP|^ro.surface_flinger.supports_background_blur=|^ro.vendor.hwc.use_overlay_planes=|^vendor.hwc.drm.enable_color_pipeline=|^ro.hwui.use_vulkan="   # blur on the CPU is far too slow
+# NVIDIA (nouveau + Mesa): ANGLE is replaced by Mesa's EGL (ro.hardware.egl), SurfaceFlinger draws with its
+# OpenGL engine (the GPU does the work) and the apps use GLES instead of Vulkan.
+[ "$GPU_NV" = 1 ] && DROP="$DROP|^ro.hardware.egl=|^debug.renderengine.vulkan=|^ro.hwui.use_vulkan=|^vendor.hwc.drm.enable_color_pipeline=|^ro.vendor.hwc.use_overlay_planes=|^ro.surface_flinger.supports_background_blur="
 [ -n "$DENSITY" ] && DROP="$DROP|^ro.sf.lcd_density="
 [ -n "$DEVICE_MODEL" ] && DROP="$DROP|^ro.product.model=|^ro.product.vendor.model=|^ro.product.marketname=|^ro.product.vendor.marketname="
 { grep -v -E "$DROP" /new/vendor/build.prop
@@ -428,6 +531,23 @@ DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_c
     # what SurfaceFlinger already uses successfully here. Seen on the Ryzen 3 3350U, second logs.
     echo "ro.hwui.use_vulkan=false"
   fi
+  if [ "$GPU_NV" = 1 ]; then
+    # The EGL loader takes the driver's name from ro.hardware.egl and loads it from /vendor/lib64/egl: with
+    # "mesa" it loads libEGL_mesa.so (Mesa's gallium nouveau) instead of ANGLE, so apps, SurfaceFlinger and
+    # HWUI all draw with the NVIDIA GPU.
+    echo "ro.hardware.egl=mesa"
+    # SurfaceFlinger composites with its Vulkan engine by default; that engine needs a Vulkan driver and
+    # NVIDIA has none, so use the OpenGL engine (EGL/GLES through Mesa) instead.
+    echo "debug.renderengine.vulkan=false"
+    # Same for the apps: HWUI with Vulkan would need a Vulkan driver.
+    echo "ro.hwui.use_vulkan=false"
+    # drm_hwcomposer: nouveau's planes have no COLOR_PIPELINE property (like amdgpu's), and its "generic"
+    # backend would try overlay planes.
+    echo "vendor.hwc.drm.enable_color_pipeline=false"
+    echo "ro.vendor.hwc.use_overlay_planes=false"
+    # Background blur is expensive; on a slow driver it is not worth it.
+    echo "ro.surface_flinger.supports_background_blur=0"
+  fi
   if [ -n "$DENSITY" ]; then echo "ro.sf.lcd_density=$DENSITY"; fi
   if [ -n "$DEVICE_MODEL" ]; then
     echo "ro.product.model=$DEVICE_MODEL"
@@ -436,7 +556,7 @@ DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_c
     echo "ro.product.vendor.marketname=$DEVICE_MODEL"
   fi
 } > /tmp/vendor.build.prop && mount --bind /tmp/vendor.build.prop /new/vendor/build.prop \
-  && log "hook: vendor build.prop: protected_vm.supported hidden, sRGB-only display, lcd_density=${DENSITY:-stock}, software GPU props=${GPU_SW:-0}"
+  && log "hook: vendor build.prop: protected_vm.supported hidden, sRGB-only display, lcd_density=${DENSITY:-stock}, software GPU props=${GPU_SW:-0}, nvidia props=${GPU_NV:-0}"
 # Only one Trusty VM may own CID 200: drop the plain launcher's auto-start so the on-demand
 # (accessor-registering) launcher runs it, falling back to non-protected by itself.
 R=/new/system_ext/etc/init/desktop-trusty_security_vm_launcher.rc

@@ -72,3 +72,6 @@ __pycache__/
 # (the kernel only accepts a manager APK with the official signing certificate)
 /usb/ksu/manager.apk
 /usb/ksu/ksud
+
+# Mesa EGL/GLES for the nouveau driver (NVIDIA): built by tools/mesa-android/build.sh, copied to usb/mesa/ by hand
+/usr/mesa/

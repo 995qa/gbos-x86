@@ -53,6 +53,18 @@ g() { grep "$@" $W/all.txt || true; }
 } | grep -v ' ' | sort -u > $W/want.txt
 python3 -I $REPO/tools/fw_wanted.py $REPO/usb/modules $W/all.txt $W/WHENCE --unresolved > $W/unresolved.txt
 echo "modules ask for $(wc -l < $W/unresolved.txt | tr -d ' ') names linux-firmware does not have (see $W/unresolved.txt; older/pre-production chips, SDIO boards)"
+# The nouveau (NVIDIA) driver asks for the GSP firmware of every chip it knows, one 30-70 MB file per chip and
+# version (2.5 GB in total). Only the card that is actually in the machine needs one, and its name is in the
+# boot log ("Direct firmware load for nvidia/ga102/gsp/gsp-570.144.bin failed"), so the big ones are left out
+# by default: NVIDIA_GSP=1 fetches them all, NVIDIA_GSP="nvidia/ga102/gsp" fetches only the given paths.
+if grep -q '^nvidia/.*/gsp/gsp-' $W/want.txt; then
+  case "${NVIDIA_GSP:-0}" in
+    0) grep -v -E '^nvidia/[^/]+/gsp/gsp-' $W/want.txt > $W/want2.txt; mv $W/want2.txt $W/want.txt
+       echo "nouveau: the per-chip GSP firmware (2.5 GB) is not fetched; set NVIDIA_GSP=1 (or NVIDIA_GSP=nvidia/ga102/gsp) for the card in the machine";;
+    1) :;;
+    *) grep -E "^$NVIDIA_GSP" $W/want.txt > $W/want2.txt; mv $W/want2.txt $W/want.txt;;
+  esac
+fi
 tr '\n' '\0' < $W/want.txt | xargs -0 git checkout HEAD --
 mkdir -p $OUT
 tar -cf - -T $W/want.txt | tar -xf - -C $OUT

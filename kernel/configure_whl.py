@@ -79,6 +79,11 @@ _y('BT_HCIBTUSB_BCM', 'BT_HCIBTUSB_MTK', 'BT_HCIBTUSB_RTL', 'BT_HCIBTUSB_INTEL')
 _m('DRM_I915')
 _y('ACPI_VIDEO', 'BACKLIGHT_CLASS_DEVICE', 'DRM_I915_BACKLIGHT_HELPER')
 _m('DRM_XE')  # Arrow Lake and newer; optional
+# NVIDIA cards: nouveau, the open-source driver. It gives the display (KMS) and, with Mesa's gallium
+# nouveau driver on the Android side (usb/hook.sh, tools/mesa-android/build.sh), 3D acceleration:
+# NVIDIA has no open Vulkan driver, so the graphics stack has to use GL/GLES instead of ANGLE.
+# Firmware: nvidia/gsp/*.bin (Turing and newer) and the per-chip fecs blobs (tools/fw_wanted.py).
+_m('DRM_NOUVEAU')
 # Touchpad / keyboard / sensors / ISH
 _y('PINCTRL_INTEL', 'PINCTRL_SUNRISEPOINT', 'PINCTRL_ICELAKE', 'PINCTRL_TIGERLAKE', 'PINCTRL_ALDERLAKE',
    'PINCTRL_METEORLAKE', 'PINCTRL_JASPERLAKE', 'PINCTRL_ELKHARTLAKE', 'PINCTRL_LAKEFIELD', 'PINCTRL_GEMINILAKE',

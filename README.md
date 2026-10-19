@@ -254,6 +254,31 @@ Expect a slow, but working, desktop; use a lower `RESOLUTION` if it crawls. **Ne
 (Ryzen) is untested too. `tools/test_gpu_select.sh` tests the decision logic and `tools/swiftshader-android/qemu/run.py` smoke-tests the
 driver inside Google's userspace under QEMU.
 
+## NVIDIA graphics (nouveau, experimental)
+
+NVIDIA is the odd one out: **there is no open-source Vulkan driver for NVIDIA**, and Google's image renders everything through
+Vulkan (ANGLE → `vulkan.intel.so`, SurfaceFlinger's Vulkan engine, HWUI's Vulkan backend). The only open 3D path for an NVIDIA card is
+Mesa's gallium **nouveau** driver (GL/GLES), so this path replaces ANGLE with Mesa instead of replacing the Vulkan driver:
+
+- **Kernel:** `DRM_NOUVEAU=m` (`kernel/configure_whl.py`, GENERIC) gives the nouveau driver, its KMS display and the GSP firmware
+  (`nvidia/gsp/*.bin` and the per-chip blobs, picked up by `tools/fw_wanted.py` from the module's `firmware=` strings).
+- **Userspace:** `tools/mesa-android/build.sh` cross-builds Mesa 25.0.7 (gallium nouveau, EGL/GLES, the android platform) for Android
+  x86_64 with the NDK in docker, like `tools/radv-android/build.sh` does for RADV. It writes `libEGL_mesa.so`,
+  `libGLESv1_CM_mesa.so`, `libGLESv2_mesa.so`, `libgallium_dri.so` and `libgbm.so.1`; copy them to the stick's `gbos/mesa/`.
+- **Boot:** `hook.sh` sees that the display is on an NVIDIA card (the DRM card with the connected connector is bound to nouveau), puts
+  Mesa's EGL/GLES where Android's EGL loader looks for a native driver (`/vendor/lib64/egl/`, which needs a tmpfs overlay of
+  `/vendor/lib64` because `/vendor` is a read-only erofs) and sets `ro.hardware.egl=mesa`, so the loader skips ANGLE. SurfaceFlinger
+  composites with its OpenGL engine (`debug.renderengine.vulkan=false`) and the apps draw with GLES (`ro.hwui.use_vulkan=false`).
+  Vulkan apps get SwiftShader (the CPU Vulkan driver) — NVIDIA has no open Vulkan driver to give them.
+- `GPU_NVIDIA` in `gbos.cfg`: `auto` (default: when the display is on an NVIDIA card), `1` (force it, e.g. on a hybrid laptop whose
+  panel is on the Intel GPU — that cannot work, the dGPU cannot scan out to the Intel panel), `0` (never).
+
+**Status: written and tested off-hardware only; it has never run on an NVIDIA card.** `tools/test_gpu_select.sh` checks the decision
+logic (22 checks: the display card decides, a hybrid laptop keeps the Intel path, the Mesa files are required). The known risk is
+Mesa's Android EGL platform, which imports a window's buffers through the legacy gralloc handle (`buf->handle` + the gralloc module's
+`perform` op) while this image uses cros_gralloc/minigbm with the mapper4 HAL — if the buffers cannot be imported, the screen stays
+black. Ask for `logs/boot-N/hwdetect.txt` (`== gpu`), `stage0-dmesg.txt` (`nouveau ...`) and `logcat.txt` (grep `EGL|Mesa|dri|gralloc`).
+
 ## Repository map
 
 | Path | What |
@@ -270,6 +295,7 @@ driver inside Google's userspace under QEMU.
 | `usb/out/BOOTX64.EFI` | **current kernel** (build #30: #29 + gbOS86 boot menu), boots directly from UEFI |
 | `usb/patched/`, `usb/libkm_compat.so` | patched Google libraries; `usb/patched/MANIFEST` (generated) lists each patch with the sha256 of its original |
 | `tools/swiftshader-android/` | builds SwiftShader as Android's Vulkan HAL (docker + NDK) for AMD GPUs |
+| `tools/mesa-android/` | builds Mesa's EGL/GLES with the gallium nouveau driver (docker + NDK) for NVIDIA GPUs |
 | `usb/kmod/` | `btusb`, `btintel`, `btrtl` built for kernel #29 |
 | `usb/installer/` | Alpine `sfdisk`/`mke2fs`/`e2fsck`/`mkfs.fat`/`blkid` + musl (`tools/fetch_installer_tools.sh`) |
 | `usb/firmware/` | Intel Wi-Fi + Bluetooth firmware, `regulatory.db` |

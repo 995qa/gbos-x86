@@ -467,3 +467,41 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   - *Not verified on the laptop.* What to look for in `kmsg.log` / `stage0-dmesg.txt`: "welcome to KernelSU version 32680",
     "dispatcher installed at slot N", the app showing up in the manager, and `logs/boot-N/ksu.txt` (the install log).
     Whether `su` really works for a granted app is the real test.
+- 2026-10-19 **NVIDIA GPUs: nouveau with 3D acceleration through Mesa's gallium nouveau — written, never run on an NVIDIA card.**
+  The user asked for "NVIDIA 3D accel (nouveau)" on a machine where the NVIDIA card drives the display (not an Optimus hybrid).
+  - *Why it is not just a driver swap.* NVIDIA has **no open-source Vulkan driver**, and Google's image renders everything through
+    Vulkan: ANGLE (GLES -> Vulkan) for the apps, SurfaceFlinger's Vulkan engine, HWUI's Vulkan backend, and the only Vulkan HAL is
+    Intel's ANV. The only open 3D path for an NVIDIA card is Mesa's gallium **nouveau** (GL/GLES), so the stack has to run on
+    OpenGL instead: the EGL loader is pointed at Mesa (`ro.hardware.egl=mesa`) and ANGLE is not used at all.
+  - *Kernel.* `DRM_NOUVEAU=m` in `kernel/configure_whl.py` GENERIC (the module brings DRM_TTM, the display helpers, MXM_WMI and
+    `DRM_NOUVEAU_BACKLIGHT` with it). Built incrementally in the `gbos-ksrc` volume with `kernel/isa_emu_patch/build_syms.sh
+    DRM_NOUVEAU` (the volume's kernel is now #39; only the config changed, so the shipped `usb/out/BOOTX64.EFI` still works with it).
+    `usb/modules/` re-synced from the same tree: 429 modules, with `nouveau.ko` (+ `ch7006`/`sil164`, the USB-C dock bridges).
+  - *Firmware.* nouveau asks for the GSP firmware of every chip it knows: 519 names, one 30-70 MB file per chip and version (2.5 GB).
+    `tools/fetch_firmware.sh` now leaves the per-chip `nvidia/*/gsp/gsp-*.bin` out by default (`NVIDIA_GSP=1` for all of them,
+    `NVIDIA_GSP=nvidia/ga102/gsp` for one card); the boot log names the file the card in the machine needs. Pascal and older
+    (GTX 10xx) need nothing from linux-firmware: their vbios is read from the card.
+  - *Userspace.* `tools/mesa-android/build.sh` (new): Mesa 25.0.7 for Android x86_64 with the NDK in docker (the `gbos-swsr` volume,
+    like `tools/radv-android/build.sh`): gallium nouveau, EGL/GLES, the android platform, libdrm with nouveau (static, so the
+    driver has no extra .so). Output: `libEGL_mesa.so`, `libGLESv1_CM_mesa.so`, `libGLESv2_mesa.so`, `libgallium_dri.so`,
+    `libgbm.so.1` -> copy to the stick's `gbos/mesa/`. Two build errors on the way, both worth remembering: BuildKit wants
+    `FROM --platform=linux/amd64` (the space form is parsed as two arguments and the build fails with "FROM requires either one or
+    three arguments"), and the current apt rejects `apt-get install -y -qq --no-recommends` ("--no-recommends is not understood in
+    combination with the other options"): drop the `-qq`.
+  - *Boot.* `usb/hook.sh`: `gbos_gpu_decide` now looks at **which card the display is on** (the DRM card with a connected connector),
+    not only at which driver is bound: a hybrid laptop whose panel is on the Intel GPU keeps the Intel path, an NVIDIA-only machine
+    takes the nouveau path (`GPU_NVIDIA=auto|1|0` in `gbos.cfg`). `gbos_gpu_mesa_install` puts Mesa's EGL/GLES where Android's EGL
+    loader looks for a native driver, `/vendor/lib64/egl/`; `/vendor` is a read-only erofs without that directory, so `/vendor/lib64`
+    is overlaid with a tmpfs that has the original files bind-mounted back. Then `vendor/build.prop` gets
+    `ro.hardware.egl=mesa` (the loader then loads `libEGL_mesa.so` instead of ANGLE: in AOSP's `opengl/libs/EGL/Loader.cpp` the
+    native driver is taken from the property, and `GraphicsEnvironment.java` only sets ANGLE up when it is "angle"),
+    `debug.renderengine.vulkan=false` (SurfaceFlinger composites with its OpenGL engine), `ro.hwui.use_vulkan=false` (the apps use
+    GLES), `vendor.hwc.drm.enable_color_pipeline=false` and `ro.vendor.hwc.use_overlay_planes=false` (drm_hwcomposer on an unknown
+    driver, like the amdgpu case). Vulkan apps get SwiftShader (the CPU driver) — there is nothing else to give them.
+  - *Tests.* `tools/test_gpu_select.sh`: 22 checks (the display card decides, the hybrid laptop keeps Intel, the Mesa files are
+    required, the props are written once).
+  - **Not verified on hardware, and the risk is known:** Mesa's android EGL platform imports a window's buffers through the legacy
+    gralloc handle (`buf->handle` plus the gralloc module's `perform` op; Mesa's cros backend wants a module named "CrOS Gralloc"),
+    while this image's gralloc is cros_gralloc/minigbm with the mapper4 HAL and its legacy module is named "gralloc". If the buffers
+    cannot be imported, the screen stays black. First boot to try: `logs/boot-N/hwdetect.txt` ("== gpu"), `stage0-dmesg.txt`
+    ("nouveau ..."), `logcat.txt` (grep `EGL|Mesa|dri|gralloc|drmhwc`).
