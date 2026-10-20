@@ -21,12 +21,21 @@ flag is set, but a CPU Vulkan driver must lock every buffer ANGLE/Skia/SurfaceFl
 ro.hardware.vulkan=pastel would also need a vulkan.pastel.so in /vendor/lib64/hw (read-only erofs: a tmpfs overlay of that directory),
 so instead the literal "pastel\\0" is rewritten to "intel\\0\\0": the flag is set for ro.hardware.vulkan=intel, which hook.sh keeps.
 
+Third edit (YV12 on RADV): drv_dumb_bo_create_ex sizes a DRM_FORMAT_YVU420_ANDROID dumb buffer from the width aligned to 32 and
+lets amdgpu pick the pitch (256-byte multiples); drv_bo_from_format_and_padding then makes the chroma stride pitch/2. RADV can only import
+a linear plane whose pitch is a multiple of 256 (GFX9+), so e.g. 1280 wide gives a 640 chroma pitch and the import fails (SurfaceFlinger
+then aborts on "Failed to create a valid texture ... format:842094169"). The width is now aligned to 512 instead, so pitch/2 is a
+multiple of 256. The 8 bytes at 0xe4a7 (add r12d,0x1f; and r12d,-32) become `call cave` + nop; the cave is 14 int3 bytes of padding
+at 0xe422: add r12d,0x1ff; and r12w,0xfe00; ret.
+
 Only applied to the exact original (sha256 pinned): the offset is into one specific build.
 """
 import hashlib, sys
 
 ORIG_SHA = 'd48536951fd0e9643e71a5c8843e90833ce3e212e182782185470e2fbbfad673'
 KOMEDA = 0x50b7   # .rodata literal compared at 0xc549 and pointed to by backend_komeda.name (file 0x1c238)
+ALIGN_SITE = 0xe4a7   # drv_dumb_bo_create_ex, YVU420_ANDROID: add r12d,0x1f; and r12d,-32 (width in r12)
+CAVE = 0xe422         # int3 padding before drv_dumb_bo_create_ex
 PASTEL = 0x51af   # .rodata literal strstr()'d against ro.hardware.vulkan at 0x17364 (its only reference)
 
 
@@ -40,8 +49,14 @@ def main():
     d[KOMEDA:KOMEDA + 7] = b'amdgpu\0'
     assert d[PASTEL:PASTEL + 7] == b'pastel\0' and d[PASTEL - 1] == 0 and d.count(b'pastel') == 1
     d[PASTEL:PASTEL + 7] = b'intel\0\0'
+    assert d[ALIGN_SITE:ALIGN_SITE + 8] == bytes.fromhex('4183c41f4183e4e0')
+    assert d[CAVE:CAVE + 14] == b'\xcc' * 14
+    rel = (CAVE - (ALIGN_SITE + 5)) & 0xffffffff
+    d[ALIGN_SITE:ALIGN_SITE + 8] = b'\xe8' + rel.to_bytes(4, 'little') + b'\x0f\x1f\x00'
+    d[CAVE:CAVE + 14] = bytes.fromhex('4181c4ff010000' '664181e400fe' 'c3')
     open(dst, 'wb').write(d)
-    print('patched: generic linear backend answers to DRM driver "amdgpu"; software-renderer flag set by ro.hardware.vulkan=intel')
+    print('patched: generic linear backend answers to DRM driver "amdgpu"; software-renderer flag set by ro.hardware.vulkan=intel; '
+          'YV12 dumb-buffer width aligned to 512')
 
 
 if __name__ == '__main__':
