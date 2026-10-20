@@ -611,3 +611,13 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   fallback backend. It also uses DRM_FORMAT_MOD_LINEAR for those buffers, because the fallback backend reports
   DRM_FORMAT_MOD_INVALID and the DRI2 import needs the modifier to know the number of planes.
   The patch is applied by tools/mesa-android/build.sh (idempotent) and the resulting libraries go to the stick's gbos/mesa/.
+- 2026-10-19 **The Mesa patch is in: the window buffer's native handle now comes from the AHardwareBuffer.**
+  `tools/mesa-android/patch_egl_handle.py` (applied by tools/mesa-android/build.sh, idempotent) patches Mesa's
+  src/egl/drivers/dri2/platform_android.c: when the ANativeWindowBuffer has no handle (the mapper4 path of AOSP's
+  GraphicBuffer), the handle is taken from the AHardwareBuffer - which *is* the GraphicBuffer - with
+  AHardwareBuffer_getNativeHandle(). That function is a private AOSP API (the NDK does not export it, the framework's
+  libnativewindow.so does), so the patch declares it; the resulting libEGL_mesa.so has it as an undefined symbol and
+  picks it up from the device's libnativewindow.so at run time. u_gralloc's fallback backend then finds the dma-buf fd
+  in the handle, and the patch also uses DRM_FORMAT_MOD_LINEAR for those buffers (the fallback backend reports
+  DRM_FORMAT_MOD_INVALID, which the DRI2 import rejects because it needs the modifier to know the number of planes).
+  The rebuilt libraries are in usb/mesa/ (and on the test system); the next boot with GPU_NVIDIA=auto tests it.
