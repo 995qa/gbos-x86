@@ -220,7 +220,11 @@ gbos_gpu_decide() {
       log "hook: nvidia: nouveau bound (display on ${disp:-none}), Mesa's EGL active: 3D acceleration on the NVIDIA GPU"
       return 0
     fi
-    log "hook: nvidia: nouveau bound but Mesa's EGL is not usable: falling back"
+    # Mesa's EGL is not usable: the display is on the NVIDIA card, so the Intel path would show nothing.
+    # Software rendering (SwiftShader) at least draws a picture, through the nouveau card's display.
+    GPU_SW=1
+    log "hook: nvidia: nouveau bound but Mesa's EGL is not usable: software rendering instead"
+    return 0
   fi
   # 2) no Intel GPU and some other driver: software rendering (the CPU draws everything).
   if [ -z "$intel" ] && ! gbos_gpu_intel_pci && [ -n "$real" ]; then
