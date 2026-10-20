@@ -58,7 +58,9 @@ docker run --rm --platform linux/amd64 -e KEEP_BUILD="${KEEP_BUILD:-0}" -v gbos-
   [ -d mesa/.git ] || git clone -q --depth 1 --branch mesa-25.0.7 https://gitlab.freedesktop.org/mesa/mesa.git mesa
   [ -d drm/.git ]  || git clone -q --depth 1 --branch libdrm-2.4.124 https://gitlab.freedesktop.org/mesa/drm.git drm
   # our patch: with a mapper4 gralloc the window buffer has no native handle, so Mesa cannot
-  # import the dma-buf and nothing is rendered (tools/mesa-android/patch_egl_handle.py)
+  # import the dma-buf and nothing is rendered (tools/mesa-android/patch_egl_handle.py).
+  # Start from the pristine file, so the patch is always the current one.
+  git -C mesa checkout -- src/egl/drivers/dri2/platform_android.c
   python3 /h/patch_egl_handle.py /w/mesa
   TC=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
   SDK=34
@@ -90,7 +92,8 @@ EOF
   export PKG_CONFIG_PATH=/w/sys/lib/pkgconfig PKG_CONFIG_LIBDIR=/w/sys/lib/pkgconfig
   cd mesa
   [ "${KEEP_BUILD:-0}" = 1 ] || rm -rf /w/mesa-b
-  [ -d /w/mesa-b ] || meson setup /w/mesa-b . --cross-file /w/cross.txt --prefix=/w/mesa-out --buildtype=release -Db_ndebug=true -Dstrip=true \
+  RECONF=; [ -d /w/mesa-b ] && RECONF=--reconfigure
+  meson setup $RECONF /w/mesa-b . --cross-file /w/cross.txt --prefix=/w/mesa-out --buildtype=release -Db_ndebug=true -Dstrip=true \
     -Dc_args="-I/w/sys/include -I/w/sys/include/libdrm" -Dcpp_args="-I/w/sys/include -I/w/sys/include/libdrm" \
     -Dplatforms=android -Dandroid-stub=true -Dplatform-sdk-version=$SDK -Dandroid-libbacktrace=disabled -Dcpp_rtti=false \
     -Dgallium-drivers=nouveau -Degl=enabled -Dgles1=enabled -Dgles2=enabled -Dopengl=true -Dgbm=enabled \
