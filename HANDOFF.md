@@ -633,3 +633,15 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
     when the display is on the NVIDIA card. The Intel path has to keep the image's Mesa.
   - hook.sh now logs the cards and the connected connector ("hook: gpu: cards [card0 nouveau;card1 i915]; display on card0
     (driver nouveau, connector DP-1)"), so it is visible in every boot's log which port the monitor is in.
+- 2026-10-20 **The black picture in the Mesa path is not the buffer import: nouveau's 3D engine rejects Mesa's commands.**
+  The kernel log of boot-11 (and boot-8) is full of `nouveau 0000:01:00.0: gr: DATA_ERROR 00000003 [INVALID_OPERATION] ... class c197
+  mthd 19d0` (4790 lines in boot-11, 3128 in boot-8, **0 in boot-7** - the boot that works). The class c197 is the Pascal GPC (the shader
+  engine) and the methods are from nouveau's class headers: `0x19d0 = NV9197_CLEAR_SURFACE`, `0x17e0 = NV9197_DRAW_INDEX_BUFFER`,
+  `0x0d78 = NV9197_DRAW_VERTEX_ARRAY`. So the very first clear and every draw are refused by the GPU.
+  - The errors come from SurfaceFlinger *and* from the apps' RenderThreads, and they also happen for clears of plain textures, so it
+    is not about the dma-buf import: Mesa's state/commands are invalid for this chip.
+  - Mesa 25.0.7 uses the new "nvc0" driver for Pascal (the old nv50/TGSI driver only knows Fermi/Kepler/Maxwell:
+    `nv50_screen.c`: `switch (dev->chipset & 0xf0)` -> 0x50/0x80/0x90/0xa0) and compiles the shaders with the new "nv50_ir" (NIR) path.
+    That combination is new for Pascal, so a newer Mesa is tried next (mesa-26.2.5).
+  - The kernel side is fine: the kernel has the Pascal-specific GR engine (`nvkm/engine/gr/gp107.c`, `ctxgp107.c`) and the GR
+    firmware is built into the kernel (fuc3), not loaded from a file.
