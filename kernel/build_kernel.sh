@@ -60,7 +60,7 @@ export P=/host/kernel/isa_emu_patch
 sh \$P/apply.sh
 P=/host/kernel/ashmem_shim sh /host/kernel/ashmem_shim/apply.sh
 for s in i915_color_pipeline i915_edp_colorspace i915_edp_no_colorspace i915_edp_full_range \\
-         i915_ignore_gamma debug_selinux surface_sl7_sam alc269_hp_envy13_aq; do
+         i915_ignore_gamma debug_selinux surface_sl7_sam alc269_hp_envy13_aq nouveau_atomic; do
   sh \$P/\$s.sh > /dev/null
 done
 python3 \$P/sdw_sl7.py /build/src > /dev/null

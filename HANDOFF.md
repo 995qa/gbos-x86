@@ -562,3 +562,21 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   - *Also learned:* this kernel's tmpfs has no user xattrs ("xattr" is not a tmpfs mount option here), so an overlayfs with a
     tmpfs upper is not an option; and Mesa's EGL links the gallium driver (libgallium_dri.so) directly, so that file has to
     be in /vendor/lib64 (a linker search path) - it is now.
+- 2026-10-19 **Fourth NVIDIA boot: Mesa's nouveau really runs on the GPU (OpenGL ES 3.2, renderer NV137) - the display
+  pipeline is what is missing: drm_hwcomposer is atomic-only and nouveau had no atomic modesetting.**
+  From the log of boot-3:
+  - `SurfaceFlinger: Threaded RenderEngine with SkiaGL Backend (Ganesh)`, `vendor: Mesa`, `renderer: NV137`,
+    `version: OpenGL ES 3.2 Mesa 25.0.7` - **the 3D acceleration works**: Mesa's gallium nouveau has a context on the Quadro P1000
+    (the GR engine is up since the firmware was fixed) and SurfaceFlinger composites with OpenGL.
+  - `drmhwc: Failed to set atomic cap -1` and `drmhwc: No pipelines available. Creating null-display for headless mode` -
+    **the hardware composer cannot use the card**: drm_hwcomposer is atomic-only and nouveau did not implement atomic modesetting
+    (the DRM mode_config hooks were never filled in), so the HWC has no pipeline for the connected DP-1 on the nouveau card and
+    SurfaceFlinger ends up with a null display. The kernel console still works (nouveau's own fbdev), which is why the screen shows
+    the boot messages.
+  - *The fix is upstream*: Lyude Paul filled in the two lines in January 2026 ("drm/nouveau/disp: Set
+    drm_mode_config_funcs.atomic_(check|commit)") and enabled atomic by default in August 2026 ("drm/nouveau: Enable atomic
+    modesetting by default"). Our android17-6.18 tree has the encoder/connector/crtc atomic helpers (that series was merged) but
+    not the last step, so `kernel/isa_emu_patch/nouveau_atomic.sh` ports both parts: the two mode_config lines in
+    nouveau_display.c and the `nouveau.atomic` default (0 -> 1, so the DRM core gets DRIVER_ATOMIC). "nouveau.atomic=0" on the
+    module load turns it off again. The change is in the *module* (nouveau.ko), so no new kernel image is needed - only the module
+    tree (usb/modules/, 429 modules).
