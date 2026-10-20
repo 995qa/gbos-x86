@@ -160,9 +160,11 @@ gbos_gpu_mesa_install() {
   done
   V=${NEWROOT:-/new}/vendor/lib64
   O=/tmp/gbos-vendor-egl
-  rm -rf $O; mkdir -p $O/orig $O/new/egl
+  rm -rf $O; mkdir -p $O/orig $O/new
   mount --bind $V $O/orig 2>/dev/null || { log "hook: nvidia: cannot read $V"; return 1; }
   mount -t tmpfs -o mode=0755 tmpfs $O/new 2>/dev/null || { log "hook: nvidia: tmpfs for /vendor/lib64 FAILED"; return 1; }
+  # the tmpfs hides what was in $O/new, so the directories are made after the mount
+  mkdir -p $O/new/egl || { log "hook: nvidia: cannot create $O/new/egl"; return 1; }
   n=0
   for f in $O/orig/*; do
     [ -e "$f" ] || continue
