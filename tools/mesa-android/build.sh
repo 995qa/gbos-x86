@@ -55,7 +55,12 @@ docker run --rm --platform linux/amd64 -e KEEP_BUILD="${KEEP_BUILD:-0}" -v gbos-
   INC="$A/libhardware/include:$A/libhardware/include_all:$A/core/libcutils/include:$A/core/libsync/include:$A/core/libsystem/include:$A/core/libutils/include:$A/core/liblog/include:$A/core/libvndksupport/include:$A/native/libs/nativewindow/include:$A/native/libs/arect/include:$A/native/vulkan/include"
   export CPLUS_INCLUDE_PATH=$INC C_INCLUDE_PATH=$INC
   # Mesa and libdrm, pinned (same versions as tools/radv-android/build.sh)
-  [ -d mesa/.git ] || git clone -q --depth 1 --branch mesa-25.0.7 https://gitlab.freedesktop.org/mesa/mesa.git mesa
+  # MESA_TAG can be overridden to try another Mesa release (the nouveau driver is new for Pascal:
+  # Mesa 25.x uses the nvc0 driver with the nv50_ir (NIR) shader path there).
+  MESA_TAG=${MESA_TAG:-mesa-26.2.5}
+  MESA_DIR=mesa-${MESA_TAG#mesa-}
+  [ -d $MESA_DIR/.git ] || git clone -q --depth 1 --branch $MESA_TAG https://gitlab.freedesktop.org/mesa/mesa.git $MESA_DIR
+  rm -rf /w/mesa && ln -s /w/$MESA_DIR /w/mesa
   [ -d drm/.git ]  || git clone -q --depth 1 --branch libdrm-2.4.124 https://gitlab.freedesktop.org/mesa/drm.git drm
   # our patch: with a mapper4 gralloc the window buffer has no native handle, so Mesa cannot
   # import the dma-buf and nothing is rendered (tools/mesa-android/patch_egl_handle.py).
@@ -99,8 +104,8 @@ EOF
     -Dgallium-drivers=nouveau -Degl=enabled -Dgles1=enabled -Dgles2=enabled -Dopengl=true -Dgbm=enabled \
     -Dvulkan-drivers= -Dllvm=disabled -Dglx=disabled -Dglvnd=disabled -Dvalgrind=disabled -Dlibunwind=disabled \
     -Dlmsensors=disabled -Dshader-cache=enabled -Dbuild-tests=false -Dvulkan-layers= -Dvideo-codecs= \
-    -Dgallium-va=disabled -Dgallium-vdpau=disabled -Dxlib-lease=disabled -Dzstd=disabled -Dperfetto=false \
-    -Dmicrosoft-clc=disabled -Dintel-rt=disabled -Dteflon=false -Dgallium-opencl=disabled -Dgallium-rusticl=false -Dtools= \
+    -Dgallium-va=disabled -Dxlib-lease=disabled -Dzstd=disabled -Dperfetto=false \
+    -Dmicrosoft-clc=disabled -Dintel-rt=disabled -Dteflon=false -Dgallium-rusticl=false -Dtools= \
     -Dglx=disabled >/w/mesa-setup.log 2>&1 || { tail -60 /w/mesa-setup.log; exit 1; }
   ninja -C /w/mesa-b -j"$(nproc)" >/w/mesa-build.log 2>&1 || { tail -60 /w/mesa-build.log; exit 1; }
   echo "=== built files ==="

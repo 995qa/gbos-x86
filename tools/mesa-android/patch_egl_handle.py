@@ -23,7 +23,11 @@ The fix has two parts:
 Also use DRM_FORMAT_MOD_LINEAR for those buffers: u_gralloc's fallback backend reports
 DRM_FORMAT_MOD_INVALID, and the DRI2 import needs the modifier to know the number of planes.
 
-Idempotent: running it twice does nothing the second time.
+The patch also logs what the import does (the handle it got and the buffer info it derived),
+so a boot says whether the dma-buf was found.
+
+Idempotent: running it twice does nothing the second time. Works with Mesa 25.x and 26.x
+(the anchors are the lines that are the same in both).
 """
 import os
 import sys
@@ -31,12 +35,11 @@ import sys
 REL = 'src/egl/drivers/dri2/platform_android.c'
 REL_GRALLOC = 'src/util/u_gralloc/u_gralloc.c'
 
-INCLUDES_OLD = """#include <cutils/properties.h>
-#include <drm-uapi/drm_fourcc.h>
+# the includes: after the drm_fourcc.h include (the only one that is in every version)
+INCLUDES_OLD = """#include <drm-uapi/drm_fourcc.h>
 """
-INCLUDES_NEW = """#include <cutils/properties.h>
+INCLUDES_NEW = """#include <drm-uapi/drm_fourcc.h>
 #include <android/hardware_buffer.h>
-#include <drm-uapi/drm_fourcc.h>
 
 #include "util/log.h"
 """
@@ -48,11 +51,12 @@ extern const native_handle_t *AHardwareBuffer_getNativeHandle(const AHardwareBuf
 
 """
 
-BODY_OLD = """   struct dri_image *img = NULL;
+# the declaration goes in front of the import function
+DECL_ANCHOR = """static struct dri_image *
+droid_create_image_from_native_buffer("""
 
-   if (u_gralloc_get_buffer_basic_info(dri2_dpy->gralloc, &gr_handle,
-                                       &buf_info))
-      return 0;
+# after the image pointer: get the native handle and say what we got
+BODY_OLD = """   struct dri_image *img = NULL;
 """
 BODY_NEW = """   struct dri_image *img = NULL;
 
@@ -63,21 +67,23 @@ BODY_NEW = """   struct dri_image *img = NULL;
       AHardwareBuffer *ahb = ANativeWindowBuffer_getHardwareBuffer(buf);
       if (ahb) {
          gr_handle.handle = AHardwareBuffer_getNativeHandle(ahb);
-         mesa_logi("gbos: native handle from the AHardwareBuffer: %d fds",
-                   gr_handle.handle ? gr_handle.handle->numFds : -1);
       }
    }
+   mesa_logi("gbos: import: handle %p (%d fds), format %d, stride %d",
+             (void *)gr_handle.handle,
+             gr_handle.handle ? gr_handle.handle->numFds : -1,
+             gr_handle.hal_format, gr_handle.pixel_stride);
+"""
 
-   if (u_gralloc_get_buffer_basic_info(dri2_dpy->gralloc, &gr_handle,
-                                       &buf_info)) {
-      mesa_loge("gbos: no buffer info for the window buffer");
-      return 0;
-   }
-
-   /* gbos: u_gralloc's fallback backend has no modifier information and the DRI2 import needs
+# after the buffer info was fetched: the fallback backend has no modifier, use linear
+MOD_OLD = """   if (u_gralloc_get_buffer_color_info(dri2_dpy->gralloc, &gr_handle,
+"""
+MOD_NEW = """   /* gbos: u_gralloc's fallback backend has no modifier information and the DRI2 import needs
     * it to know the number of planes - gralloc buffers are linear */
    if (buf_info.modifier == DRM_FORMAT_MOD_INVALID)
       buf_info.modifier = DRM_FORMAT_MOD_LINEAR;
+
+   if (u_gralloc_get_buffer_color_info(dri2_dpy->gralloc, &gr_handle,
 """
 
 # u_gralloc: try the fallback backend before the CrOS one (the CrOS "perform" call does not
@@ -115,13 +121,13 @@ def main():
         print('already patched')
         return
     patch_file(path, ((INCLUDES_OLD, INCLUDES_NEW, 'the includes'),
-                      (BODY_OLD, BODY_NEW, 'the import')))
+                      (BODY_OLD, BODY_NEW, 'the import'),
+                      (MOD_OLD, MOD_NEW, 'the modifier')))
     # the declaration goes in front of droid_create_image_from_native_buffer
     s = open(path).read()
-    anchor = 'static struct dri_image *\ndroid_create_image_from_native_buffer('
-    if s.count(anchor) != 1:
+    if s.count(DECL_ANCHOR) != 1:
         sys.exit('anchor mismatch (the declaration)')
-    open(path, 'w').write(s.replace(anchor, DECL + anchor))
+    open(path, 'w').write(s.replace(DECL_ANCHOR, DECL + DECL_ANCHOR))
     # and u_gralloc has to use the fallback backend
     patch_file(os.path.join(root, REL_GRALLOC),
                ((GRALLOC_OLD, GRALLOC_NEW, 'the u_gralloc backends'),))
