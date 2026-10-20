@@ -33,19 +33,6 @@ gbos_bind_patches() {
   done < $G/patched/MANIFEST
   log "hook: PATCH-STATUS $gp_ok applied, $gp_bad not applied"
 }
-# Bind the patched libraries again over the paths in patched/MANIFEST (used after /vendor/lib64 was
-# overlaid: the tmpfs hid the bind mounts, so the original libraries were back and the BoringSSL
-# self-test failed on the unpatched libcrypto).
-gbos_reapply_patches() {
-  [ -f $G/patched/MANIFEST ] || return 0
-  while read -r gp_kind gp_target gp_want gp_file gp_rest; do
-    case $gp_kind in early|bind) ;; *) continue;; esac
-    [ -f "$G/$gp_file" ] || continue
-    [ -f "$gp_target" ] || continue
-    [ "$(sha256sum $gp_target | cut -d' ' -f1)" = "$gp_want" ] || continue
-    mount --bind "$G/$gp_file" "$gp_target" 2>/dev/null && log "hook: nvidia: re-applied $gp_target"
-  done < $G/patched/MANIFEST
-}
 # Google's userspace needs AVX: the first instructions of its dynamic linker (__linker_init: vxorps/vmovups ymm) are VEX-encoded,
 # and the kernel's emulator only covers the *newer* extensions (GFNI, VNNI, SHA-NI, ...), not baseline AVX. A CPU without AVX
 # (many Celeron/Pentium/Atom parts) kills init at once ("traps: init[1] trap invalid opcode ... in linker64", then a silent hang).
@@ -160,11 +147,29 @@ gbos_gpu_display_card() {
   done
   return 1
 }
+# Bind the patched libraries again over the paths in patched/MANIFEST (used after /vendor/lib64 was
+# overlaid: the tmpfs hid the bind mounts, so the original libraries were back and the BoringSSL
+# self-test failed on the unpatched libcrypto).
+gbos_reapply_patches() {
+  [ -f $G/patched/MANIFEST ] || return 0
+  while read -r gp_kind gp_target gp_want gp_file gp_rest; do
+    case $gp_kind in early|bind) ;; *) continue;; esac
+    [ -f "$G/$gp_file" ] || continue
+    [ -f "$gp_target" ] || continue
+    [ "$(sha256sum $gp_target | cut -d' ' -f1)" = "$gp_want" ] || continue
+    mount --bind "$G/$gp_file" "$gp_target" 2>/dev/null && log "hook: nvidia: re-applied $gp_target"
+  done < $G/patched/MANIFEST
+}
+
 # Install Mesa's EGL/GLES where Android's EGL loader looks for a native driver: /vendor/lib64/egl/.
 # The loader takes the name from ro.hardware.egl (libEGL_mesa.so, libGLESv1_CM_mesa.so, libGLESv2_mesa.so) and
 # only then uses ANGLE, so with ro.hardware.egl=mesa the whole system uses Mesa (nouveau) instead of ANGLE.
-# /vendor is a read-only erofs without an egl/ directory, so /vendor/lib64 is overlaid with a tmpfs that has the
-# original files bind-mounted back and egl/ (plus libgallium_dri.so and libgbm.so.1) added.
+# /vendor is a read-only erofs without an egl/ directory, so /vendor/lib64 gets a tmpfs with the vendor's
+# own files bind-mounted back and Mesa's files added.
+# The binds have to come from a *different* mount than the one they are mounted over: with the sources
+# inside the directory that is covered, the kernel drops the binds (the files stay empty) and the
+# BoringSSL self-test then fails on the unpatched libcrypto. A bind of the vendor directory (one level
+# up) is such a different mount, so the binds stick.
 # Returns 1 (and logs) when Mesa is not on the stick or the overlay fails.
 gbos_gpu_mesa_install() {
   M=$G/mesa
@@ -172,25 +177,25 @@ gbos_gpu_mesa_install() {
     [ -f "$M/$f" ] || { log "hook: nvidia: gbos/mesa/$f missing (Mesa's EGL is not on the stick: no 3D accel)"; return 1; }
   done
   V=${NEWROOT:-/new}/vendor/lib64
+  P=${NEWROOT:-/new}/vendor
   O=/tmp/gbos-vendor-egl
-  rm -rf $O; mkdir -p $O/orig $O/new
-  mount --bind $V $O/orig 2>/dev/null || { log "hook: nvidia: cannot read $V"; return 1; }
-  mount -t tmpfs -o mode=0755 tmpfs $O/new 2>/dev/null || { log "hook: nvidia: tmpfs for /vendor/lib64 FAILED"; return 1; }
-  # the tmpfs hides what was in $O/new, so the directories are made after the mount
-  mkdir -p $O/new/egl || { log "hook: nvidia: cannot create $O/new/egl"; return 1; }
+  rm -rf $O; mkdir -p $O/vendor
+  mount --bind $P $O/vendor 2>/dev/null || { log "hook: nvidia: cannot read $P"; return 1; }
+  mount -t tmpfs -o mode=0755 tmpfs $V 2>/dev/null || { log "hook: nvidia: tmpfs for /vendor/lib64 FAILED"; return 1; }
+  mkdir -p $V/egl || { log "hook: nvidia: cannot create $V/egl"; return 1; }
   n=0
-  for f in $O/orig/*; do
+  for f in $O/vendor/lib64/*; do
     [ -e "$f" ] || continue
     b=${f##*/}
     # a directory has to be a directory in the tmpfs too, or the bind mount fails
-    if [ -d "$f" ]; then mkdir "$O/new/$b" 2>/dev/null; else touch "$O/new/$b" 2>/dev/null; fi
-    mount --bind "$f" "$O/new/$b" 2>/dev/null && n=$((n+1))
+    if [ -d "$f" ]; then mkdir "$V/$b" 2>/dev/null; else touch "$V/$b" 2>/dev/null; fi
+    mount --bind "$f" "$V/$b" 2>/dev/null && n=$((n+1))
   done
-  cp -f $M/libEGL_mesa.so $M/libGLESv1_CM_mesa.so $M/libGLESv2_mesa.so $O/new/egl/ || { log "hook: nvidia: copying Mesa's EGL FAILED"; return 1; }
-  cp -f $M/libgallium_dri.so $M/libgbm.so.1 $O/new/ || { log "hook: nvidia: copying Mesa's driver FAILED"; return 1; }
-  mount --bind $O/new $V || { log "hook: nvidia: bind $O/new -> $V FAILED"; return 1; }
-  # The tmpfs hid the patched libraries (early_patch.sh's bind mounts live *under* /vendor/lib64): the
-  # BoringSSL self-test then runs the unpatched libcrypto and fails, and init reboots the device
+  cp -f $M/libEGL_mesa.so $M/libGLESv1_CM_mesa.so $M/libGLESv2_mesa.so $V/egl/ || { log "hook: nvidia: copying Mesa's EGL FAILED"; return 1; }
+  # the gallium driver (nouveau) and GBM have to be in the linker search path: /vendor/lib64 is one
+  cp -f $M/libgallium_dri.so $M/libgbm.so.1 $V/ || { log "hook: nvidia: copying Mesa's driver FAILED"; return 1; }
+  # The tmpfs hid the patched libraries (early_patch.sh's bind mounts live *under* /vendor/lib64):
+  # the BoringSSL self-test then runs the unpatched libcrypto and fails, and init reboots the device
   # ("reboot,boringssl-self-check-failed"). Put them back.
   gbos_reapply_patches
   log "hook: nvidia: Mesa's EGL/GLES installed in /vendor/lib64/egl ($n vendor files kept)"

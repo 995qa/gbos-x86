@@ -31,6 +31,8 @@ mk() {
 mkmesa() { G=$T/gbos; mkdir -p $G/mesa; for f in libEGL_mesa.so libGLESv1_CM_mesa.so libGLESv2_mesa.so libgallium_dri.so libgbm.so.1; do : > $G/mesa/$f; done; }
 check() { # name expected(GPU_SW) expected(GPU_NV) cards pci [GPU_SOFTWARE] [GPU_NVIDIA]
   n=$((n+1)); mk "$4" "$5"; SYSFS=$T/sys; GPU_SOFTWARE=${6:-auto}; GPU_NVIDIA=${7:-auto}; GPU_SW=x; GPU_NV=x
+  # a fake Android root: the Mesa install mounts a tmpfs over $NEWROOT/vendor/lib64
+  G=$T/gbos; NEWROOT=$T/new; mkdir -p $NEWROOT/vendor/lib64/hw
   gbos_gpu_decide 3
   if [ "$GPU_SW" = "$2" ] && [ "$GPU_NV" = "$3" ]; then echo "ok   $1 -> sw=$GPU_SW nv=$GPU_NV ($(tail -n1 $T/log | cut -c1-110))"
   else echo "FAIL $1: wanted sw=$2 nv=$3, got sw=$GPU_SW nv=$GPU_NV"; cat "$T/log"; fails=$((fails+1)); fi
