@@ -505,3 +505,23 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
     while this image's gralloc is cros_gralloc/minigbm with the mapper4 HAL and its legacy module is named "gralloc". If the buffers
     cannot be imported, the screen stays black. First boot to try: `logs/boot-N/hwdetect.txt` ("== gpu"), `stage0-dmesg.txt`
     ("nouveau ..."), `logcat.txt` (grep `EGL|Mesa|dri|gralloc|drmhwc`).
+- 2026-10-19 **First boot on an NVIDIA card (Dell Latitude 5490, Quadro P1000, PCI 10de:1cb1, Pascal): the kernel side works, two
+  bugs kept the picture away.** The logs (from the installed system, `gbos/logs/boot-1/`) say:
+  1. *The kernel is fine*: `nouveau 0000:01:00.0: NVIDIA GP107`, `fb: 4096 MiB GDDR5`, `[drm] Initialized nouveau 1.4.0`,
+     `fbcon: nouveaudrmfb (fb0) is primary device` — nouveau drives the panel (`card0-DP-1 status=connected`); the Intel iGPU
+     (card1) has no connector. The display-card decision in `hook.sh` therefore picked the nouveau path correctly.
+  2. *Bug 1 (mine):* `hook: nvidia: copying Mesa's EGL FAILED` — `gbos_gpu_mesa_install` created `$O/new/egl` **before** mounting the
+     tmpfs over `$O/new`, and the mount hid the directory. Fixed (the mkdir is now after the mount); the nouveau path had fallen back
+     to the Intel GPU, which has no display on this machine, so the boot stayed in the kernel messages (SurfaceFlinger:
+     "trackPendingFrame: Invalid present fence", ANGLE: "Renderer (Vulkan 1.4.348 (Intel(R) HD Graphics 530))" — it was drawing on
+     the iGPU with no panel).
+  3. *Bug 2 (the firmware):* `nouveau 0000:01:00.0: gr: firmware unavailable` — the Pascal 3D engine needs
+     `nvidia/gp107/gr/{fecs,gpccs}_*.bin` and `sw_ctx.bin`/`sw_nonctx.bin` (small, 50 KB per chip). They are in linux-firmware but
+     were not on the stick, so even with Mesa the GR engine would not have come up. Fetched for all Pascal chips (gp100, gp102, gp104,
+     gp106, gp107, gp108: 52 files, 420 KB) into `usb/firmware/nvidia/` and onto the test system. The per-chip **GSP** firmware
+     (Turing and newer, 30-70 MB per chip) is still left out of the fetch by default.
+  4. The image had no `vulkan.swiftshader.so` (the release asset was never fetched into `usb/patched/`), so there was no Vulkan driver
+     at all; fetched it (v38, 24 MB) and put it on the system: with it, a machine where Mesa's EGL cannot be installed still draws
+     something (SwiftShader, on the CPU) instead of nothing.
+  Not yet known: whether Mesa's android EGL can import this image's buffers (cros_gralloc/minigbm with mapper4, see the 2026-10-19
+  entry above) and whether drm_hwcomposer works on nouveau.
