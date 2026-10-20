@@ -547,7 +547,7 @@ DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_c
 [ "$GPU_SW" = 1 ] && DROP="$DROP|^ro.surface_flinger.supports_background_blur=|^ro.vendor.hwc.use_overlay_planes=|^vendor.hwc.drm.enable_color_pipeline=|^ro.hwui.use_vulkan="   # blur on the CPU is far too slow
 # NVIDIA (nouveau + Mesa): ANGLE is replaced by Mesa's EGL (ro.hardware.egl), SurfaceFlinger draws with its
 # OpenGL engine (the GPU does the work) and the apps use GLES instead of Vulkan.
-[ "$GPU_NV" = 1 ] && DROP="$DROP|^ro.hardware.egl=|^debug.renderengine.vulkan=|^ro.hwui.use_vulkan=|^ro.vendor.hwc.use_overlay_planes=|^ro.surface_flinger.supports_background_blur="
+[ "$GPU_NV" = 1 ] && DROP="$DROP|^ro.hardware.egl=|^debug.renderengine.vulkan=|^ro.hwui.use_vulkan=|^vendor.hwc.drm.enable_color_pipeline=|^ro.vendor.hwc.use_overlay_planes=|^ro.surface_flinger.supports_background_blur="
 [ -n "$DENSITY" ] && DROP="$DROP|^ro.sf.lcd_density="
 [ -n "$DEVICE_MODEL" ] && DROP="$DROP|^ro.product.model=|^ro.product.vendor.model=|^ro.product.marketname=|^ro.product.vendor.marketname="
 { grep -v -E "$DROP" /new/vendor/build.prop
@@ -579,11 +579,10 @@ DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_c
     echo "debug.renderengine.vulkan=false"
     # Same for the apps: HWUI with Vulkan would need a Vulkan driver.
     echo "ro.hwui.use_vulkan=false"
-    # The color pipeline stays ENABLED here (Google's default): the HWC then sets the plane's color encoding
-    # and range from the layer's dataspace. Without it the nouveau planes keep the DRM default
-    # (ITU-R BT.601 YCbCr, limited range) while the framebuffer is ARGB8888, and the display hardware
-    # misreads the pixels: the picture is black (the hardware cursor still shows, it does not go through a
-    # plane). nouveau's planes do have the COLOR_PIPELINE property, so the HWC accepts them.
+    # The color pipeline stays OFF on nouveau: with it on, drm_hwcomposer sets the plane's COLOR_ENCODING /
+    # COLOR_RANGE and the connector's Colorspace, which nouveau's atomic check does not accept - the commit
+    # fails and the display loses the signal (seen right after the boot animation).
+    echo "vendor.hwc.drm.enable_color_pipeline=false"
     # drm_hwcomposer on an unknown driver also tries overlay planes, which nouveau does not want.
     echo "ro.vendor.hwc.use_overlay_planes=false"
     # Background blur is expensive; on a slow driver it is not worth it.
