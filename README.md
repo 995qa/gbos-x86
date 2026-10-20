@@ -226,16 +226,17 @@ shipped), `hook.sh` switches to **software rendering**, logged as `hook: softwar
 - Background blur and overlay planes are turned off (`ro.surface_flinger.supports_background_blur=0`, `ro.vendor.hwc.use_overlay_planes=false`):
   blur is far too slow on the CPU, and the composer's non-Intel backend is untested.
 
-**RADV (real GPU rendering, experimental).** `tools/radv-android/build.sh` cross-builds Mesa 25.0.7's AMD Vulkan driver (RADV, no LLVM) for Android with the
-NDK in docker (about 10 minutes after the downloads) and writes `build/radv/vulkan.radv.so` (13 MB; an Android Vulkan HAL: exports `HMI`, needs only
+**RADV (real GPU rendering, experimental).** `tools/radv-android/build.sh` cross-builds Mesa main (b888682c)'s AMD Vulkan driver (RADV, no LLVM) for Android with the
+NDK r30 in Docker (about 10 minutes after the downloads) and writes `build/radv/vulkan.radv.so` (18 MB; an Android Vulkan HAL: exports `HMI`, needs only
 `libcutils/liblog/libnativewindow/libsync/libz` + bionic). Copy it to `usb/patched/`; with `GPU_VULKAN=auto` (default) `hook.sh` then binds it over
-`vulkan.intel.so` instead of SwiftShader when `amdgpu` is bound (`GPU_VULKAN=swiftshader` goes back). **It has only been built and checked as an ELF
-(`tools/test_gpu_select.sh` tests the choice); it has never run on a Radeon.** Likely trouble: buffers shared between gralloc (linear dumb buffers)
-and RADV, the composer on AMD, and SELinux/permissions on `/dev/dri/renderD128`.
+`vulkan.intel.so` instead of SwiftShader when `amdgpu` is bound (`GPU_VULKAN=swiftshader` goes back). It reaches the desktop on an
+MSI Modern 15 B7M (Ryzen 5 7530U, Barcelo, RADV RENOIR), and video previews in Play Store and Photos play. Known problems on that machine: Photos cannot open
+HEVC clips (the software HEVC decoder fails), the pointer renders as a red square, and the built-in touchpad is absent; see `HANDOFF.md`.
+`tools/test_gpu_select.sh` tests only the driver-selection logic.
 
 `GPU_SOFTWARE` in `gbos.cfg`: `auto` (default; never changes anything while an Intel GPU is present), `1` (force, for testing on Intel), `0` (never).
-Expect a slow, but working, desktop; use a lower `RESOLUTION` if it crawls. **Never booted on a real AMD laptop**; the AMD CPU side
-(Ryzen) is untested too. `tools/test_gpu_select.sh` tests the decision logic and `tools/swiftshader-android/qemu/run.py` smoke-tests the
+Expect a working desktop; use a lower `RESOLUTION` if it crawls. The AMD CPU side (Ryzen) has been tested on one MSI Modern 15 B7M (Ryzen 5 7530U).
+`tools/test_gpu_select.sh` tests the decision logic and `tools/swiftshader-android/qemu/run.py` smoke-tests the
 driver inside Google's userspace under QEMU.
 
 ## Repository map
