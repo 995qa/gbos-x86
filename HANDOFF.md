@@ -545,3 +545,20 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
     1.5 GB linux-firmware tree; `tools/fetch_firmware.sh` already resolves the same links when it clones the tree.
   - Still unknown: whether Mesa's android EGL can import this image's buffers (cros_gralloc/minigbm with mapper4) and whether
     drm_hwcomposer works on nouveau. The next boot answers both (the log now has the Mesa EGL in place).
+- 2026-10-19 **Third NVIDIA boot: the GR (3D) engine came up, but the /vendor/lib64 overlay emptied the vendor's
+  libraries, so Android still never started (the BoringSSL self-test failed and init rebooted the device).**
+  - *What worked:* `nouveau …: gr: firmware unavailable` is **gone** (the WHENCE links of the Pascal GR firmware were the
+    missing part) and the 3D engine is up. The overlay also installed Mesa's EGL correctly (470 files bound).
+  - *The bug (mine):* a tmpfs over /vendor/lib64 with the vendor's own files bind-mounted into it **does not work**: mounting
+    the tmpfs over the directory makes the kernel drop the binds whose sources are inside it, so every vendor library in the
+    tmpfs stays the empty file that `touch` created. The BoringSSL self-test then ran the unpatched libcrypto and failed
+    ("reboot,boringssl-self-check-failed"), and the same happened to /vendor/lib64/hw (the Vulkan HAL was "not replaced").
+  - *The fix:* take the binds from a **bind of the vendor directory** (one level up) instead of from the directory that is
+    covered: that is a different mount, so the kernel keeps the binds. The patched libraries are put back afterwards
+    (`gbos_reapply_patches`, the sha of the file in the tmpfs is the original's, so the check passes).
+  - *Verified on the real kernel:* `kernel/isa_emu_test/run_mesa_overlay.py` boots the kernel in QEMU and runs the real
+    `gbos_gpu_mesa_install`: the vendor's files survive, Mesa's EGL lands in /vendor/lib64/egl, the gallium driver in
+    /vendor/lib64 and the patched libz is back -> **MESA_OVERLAY_TEST_PASS**.
+  - *Also learned:* this kernel's tmpfs has no user xattrs ("xattr" is not a tmpfs mount option here), so an overlayfs with a
+    tmpfs upper is not an option; and Mesa's EGL links the gallium driver (libgallium_dri.so) directly, so that file has to
+    be in /vendor/lib64 (a linker search path) - it is now.
