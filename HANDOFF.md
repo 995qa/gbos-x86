@@ -621,3 +621,15 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
   in the handle, and the patch also uses DRM_FORMAT_MOD_LINEAR for those buffers (the fallback backend reports
   DRM_FORMAT_MOD_INVALID, which the DRI2 import rejects because it needs the modifier to know the number of planes).
   The rebuilt libraries are in usb/mesa/ (and on the test system); the next boot with GPU_NVIDIA=auto tests it.
+- 2026-10-20 **The last boot did not test the new Mesa at all: the monitor was in the motherboard's HDMI port (the Intel chip),
+  not in the NVIDIA card.**
+  The kernel log says it: in boot-9 `i915 0000:00:02.0: [drm:update_display_info] [CONNECTOR:115:HDMI-A-1] ELD monitor DELL
+  P2214H`, while in boots 6-8 it was `nouveau 0000:01:00.0: [drm:update_display_info] [CONNECTOR:43:DP-1] ELD monitor DELL
+  P2214H`. The cable was moved between the boots, so hook.sh took the Intel path ("hook: software rendering: off (auto; Intel GPU
+  driver i915 bound)", "nvidia props=0"), Mesa was not installed at all and the garbled picture is the *stock Intel path*, not the
+  NVIDIA one. (The "Using gralloc0 CrOS API" lines in that logcat are the image's own Mesa - it is the loader's
+  libEGL_mesa.so for the Intel path, not ours.)
+  - Our Mesa is built nouveau-only (`-Dgallium-drivers=nouveau`, no LLVM), so it has no i915 driver and can only be installed
+    when the display is on the NVIDIA card. The Intel path has to keep the image's Mesa.
+  - hook.sh now logs the cards and the connected connector ("hook: gpu: cards [card0 nouveau;card1 i915]; display on card0
+    (driver nouveau, connector DP-1)"), so it is visible in every boot's log which port the monitor is in.
