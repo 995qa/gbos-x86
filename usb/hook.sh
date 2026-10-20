@@ -147,6 +147,18 @@ gbos_gpu_display_card() {
   done
   return 1
 }
+# The connector the display is on ("card0-DP-1" -> "DP-1"), for the log: which port the monitor is in
+# decides which GPU is used (the motherboard's HDMI port belongs to the Intel chip, the card's DP
+# port to the NVIDIA card).
+gbos_gpu_display_connector() {
+  for c in ${SYSFS:-/sys}/class/drm/card*-*; do
+    [ -e "$c/status" ] || continue
+    [ "$(cat $c/status 2>/dev/null)" = connected ] || continue
+    b=${c##*/}; echo "${b#*-}"   # card0-DP-1 -> DP-1
+    return 0
+  done
+  return 1
+}
 # Bind the patched libraries again over the paths in patched/MANIFEST (used after /vendor/lib64 was
 # overlaid: the tmpfs hid the bind mounts, so the original libraries were back and the BoringSSL
 # self-test failed on the unpatched libcrypto).
@@ -236,6 +248,9 @@ gbos_gpu_decide() {
     [ $w -ge ${1:-0} ] && break
     sleep 1; w=$((w+1))
   done
+  # Which GPU the picture comes from: the connector that is connected decides (the monitor in the
+  # NVIDIA card's DP port -> the NVIDIA card, in the motherboard's HDMI port -> the Intel chip).
+  log "hook: gpu: cards [$(gbos_gpu_cards | tr '\n' ';')]; display on ${disp:-none} (driver ${ddrv:-none}, connector $(gbos_gpu_display_connector))"
   # 1) the display is on the NVIDIA card (or GPU_NVIDIA=1 forces it): Mesa's EGL, the GPU does the 3D.
   if [ -n "$nv" ] && { [ "$ddrv" = nouveau ] || [ -n "${GPU_NV_FORCE:-}" ]; } && [ "${GPU_NVIDIA:-auto}" != 0 ]; then
     if [ "${GPU_NVIDIA:-auto}" = sw ]; then
