@@ -525,3 +525,23 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
      something (SwiftShader, on the CPU) instead of nothing.
   Not yet known: whether Mesa's android EGL can import this image's buffers (cros_gralloc/minigbm with mapper4, see the 2026-10-19
   entry above) and whether drm_hwcomposer works on nouveau.
+- 2026-10-19 **Second boot on the NVIDIA card: the nouveau path worked, but two bugs of the /vendor/lib64 overlay kept
+  Android from starting (and a third one kept the 3D engine off).**
+  - *What worked:* `hook: nvidia: Mesa's EGL/GLES installed in /vendor/lib64/egl (465 vendor files kept)` and
+    `hook: nvidia: nouveau bound (display on card0), Mesa's EGL active: 3D acceleration on the NVIDIA GPU`, and the build.prop
+    was rewritten (`nvidia props=1`). So the display-card decision, the overlay and Mesa's EGL are in place.
+  - *Bug 1 (the boot died before Android):* the BoringSSL self-test failed and init rebooted the device
+    (`Got shutdown_command 'reboot,boringssl-self-check-failed'`), so servicemanager never came up and the screen stayed on the
+    kernel messages. Cause: the tmpfs over /vendor/lib64 **hid early_patch.sh's bind mounts** (they live *under* that directory),
+    so the *unpatched* vendor libcrypto was back; the self-test then runs the SHA-NI code (emulated by the kernel) and fails.
+    Fix: `gbos_reapply_patches` binds the patched libraries again after the overlay.
+  - *Bug 2:* the same overlay made `/vendor/lib64/hw` a **file** instead of a directory: the bind-back loop used `touch` for
+    every entry, and a directory cannot be bind-mounted onto a file. The Vulkan HAL was therefore missing (the log said
+    "Vulkan driver (SwiftShader) NOT replaced (unexpected original)"). Fix: `mkdir` for directories, `touch` for files.
+  - *Bug 3 (the 3D engine):* `nouveau …: gr: firmware unavailable` was still there. The Pascal GR engine wants
+    `nvidia/gp107/gr/sw_bundle_init.bin` and `sw_method_init.bin`, and in linux-firmware those are **WHENCE links** to
+    `nvidia/gp102/gr/…` (the git tree only has the link, the file is not there) — so they have to be copied under the link name.
+    New `tools/fetch_nvidia_firmware.sh [CHIP…]` does that for every pre-Turing chip (174 files, 1.9 MB) without cloning the
+    1.5 GB linux-firmware tree; `tools/fetch_firmware.sh` already resolves the same links when it clones the tree.
+  - Still unknown: whether Mesa's android EGL can import this image's buffers (cros_gralloc/minigbm with mapper4) and whether
+    drm_hwcomposer works on nouveau. The next boot answers both (the log now has the Mesa EGL in place).
