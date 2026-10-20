@@ -602,3 +602,12 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
     mapper4 interface headers in the Mesa build as well - a piece of work, and it is the only thing left for real 3D acceleration.
   - Until then, `GPU_NVIDIA=sw` in gbos.cfg gives a working (slow) desktop on the NVIDIA card, and `GPU_NVIDIA=auto` (the default)
     is the Mesa path.
+- 2026-10-19 **Mesa patch for the mapper4 gralloc: the window buffer's native handle (needed to import the dma-buf) is now
+  fetched from the AHardwareBuffer with the NDK's AHardwareBuffer_sendHandleToUnixSocket().**
+  The black picture in the Mesa path is not a driver problem: AOSP's GraphicBuffer::initWithSize() (the mapper4 path) never
+  fills the ANativeWindowBuffer's `handle`, and Mesa's u_gralloc (every backend) starts from that handle. `tools/mesa-android/
+  patch_egl_handle.py` patches Mesa's platform_android.c: when the window buffer has no handle, the AHardwareBuffer (which *is*
+  the GraphicBuffer) is asked for its handle over a unix socket and a native handle with the dma-buf fd is built for u_gralloc's
+  fallback backend. It also uses DRM_FORMAT_MOD_LINEAR for those buffers, because the fallback backend reports
+  DRM_FORMAT_MOD_INVALID and the DRI2 import needs the modifier to know the number of planes.
+  The patch is applied by tools/mesa-android/build.sh (idempotent) and the resulting libraries go to the stick's gbos/mesa/.

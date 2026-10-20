@@ -57,6 +57,9 @@ docker run --rm --platform linux/amd64 -e KEEP_BUILD="${KEEP_BUILD:-0}" -v gbos-
   # Mesa and libdrm, pinned (same versions as tools/radv-android/build.sh)
   [ -d mesa/.git ] || git clone -q --depth 1 --branch mesa-25.0.7 https://gitlab.freedesktop.org/mesa/mesa.git mesa
   [ -d drm/.git ]  || git clone -q --depth 1 --branch libdrm-2.4.124 https://gitlab.freedesktop.org/mesa/drm.git drm
+  # our patch: with a mapper4 gralloc the window buffer has no native handle, so Mesa cannot
+  # import the dma-buf and nothing is rendered (tools/mesa-android/patch_egl_handle.py)
+  python3 /h/patch_egl_handle.py /w/mesa
   TC=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
   SDK=34
   cat > cross.txt <<EOF
