@@ -128,9 +128,10 @@ bp "Intel (stock, unchanged)" 0 true
 n=$((n+1)); printf 'ro.hardware.egl=angle\ndebug.renderengine.vulkan=true\nro.hwui.use_vulkan=true\nvendor.hwc.drm.enable_color_pipeline=true\n' > "$T/vendor.build.prop"; rm -f "$T/out.prop"
 ( GPU_SW=0; GPU_NV=1; DENSITY=; DEVICE_MODEL=; . "$T/prop.sh" > "$T/out.prop" ) 2>/dev/null
 if grep -q '^ro.hardware.egl=mesa$' "$T/out.prop" && grep -q '^debug.renderengine.vulkan=false$' "$T/out.prop" \
-   && grep -q '^ro.hwui.use_vulkan=false$' "$T/out.prop" && grep -q '^vendor.hwc.drm.enable_color_pipeline=false$' "$T/out.prop" \
+   && grep -q '^ro.hwui.use_vulkan=false$' "$T/out.prop" \
+   && grep -q '^vendor.hwc.drm.enable_color_pipeline=true$' "$T/out.prop" \
    && [ "$(grep -c '^ro.hardware.egl=' "$T/out.prop")" = 1 ] && [ "$(grep -c '^debug.renderengine.vulkan=' "$T/out.prop")" = 1 ]; then
-  echo "ok   build.prop: NVIDIA -> ro.hardware.egl=mesa, GL render engine, no Vulkan in HWUI"; else echo "FAIL build.prop nvidia"; cat "$T/out.prop"; fails=$((fails+1)); fi
+  echo "ok   build.prop: NVIDIA -> ro.hardware.egl=mesa, GL render engine, no Vulkan in HWUI, color pipeline left on"; else echo "FAIL build.prop nvidia"; cat "$T/out.prop"; fails=$((fails+1)); fi
 n=$((n+1)); printf 'ro.hardware.egl=angle\n' > "$T/vendor.build.prop"; rm -f "$T/out.prop"
 ( GPU_SW=0; GPU_NV=0; DENSITY=; DEVICE_MODEL=; . "$T/prop.sh" > "$T/out.prop" ) 2>/dev/null
 if grep -q '^ro.hardware.egl=angle$' "$T/out.prop"; then echo "ok   build.prop: Intel keeps ro.hardware.egl=angle"; else echo "FAIL build.prop egl Intel"; fails=$((fails+1)); fi

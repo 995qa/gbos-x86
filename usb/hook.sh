@@ -350,6 +350,14 @@ service gbos_crashlog /system/bin/logcat -b crash -v threadtime -f /postinstall/
     group root log
     seclabel u:r:shell:s0
 
+# The logcat service above writes into its file with a buffer, so on a boot that hangs early the file
+# stays empty. This one dumps the buffer (and closes the file) every 30 s, so the logs of a boot that
+# gets stuck are on the stick as well.
+service gbos_logcatdump /system/bin/sh -c "while true; do sleep 30; /system/bin/logcat -b all -d -v threadtime -t 3000 > /postinstall/gbos/logs/boot-$N/logcat-dump.txt 2>/dev/null; done"
+    user root
+    group root log
+    seclabel u:r:shell:s0
+
 # The laptop is usually powered off by hand, so flush the logs to the stick every 5 s.
 service gbos_sync /system/bin/sh -c "while true; do sleep 5; sync; done"
     user root
@@ -508,6 +516,7 @@ on post-fs-data
     start gbos_logcat
     start gbos_sync
     start gbos_crashlog
+    start gbos_logcatdump
     # KernelSU: the daemon has to be in /data/adb before the kernel's own init.rc runs it.
     start gbos_ksu
 RC
@@ -538,7 +547,7 @@ DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_c
 [ "$GPU_SW" = 1 ] && DROP="$DROP|^ro.surface_flinger.supports_background_blur=|^ro.vendor.hwc.use_overlay_planes=|^vendor.hwc.drm.enable_color_pipeline=|^ro.hwui.use_vulkan="   # blur on the CPU is far too slow
 # NVIDIA (nouveau + Mesa): ANGLE is replaced by Mesa's EGL (ro.hardware.egl), SurfaceFlinger draws with its
 # OpenGL engine (the GPU does the work) and the apps use GLES instead of Vulkan.
-[ "$GPU_NV" = 1 ] && DROP="$DROP|^ro.hardware.egl=|^debug.renderengine.vulkan=|^ro.hwui.use_vulkan=|^vendor.hwc.drm.enable_color_pipeline=|^ro.vendor.hwc.use_overlay_planes=|^ro.surface_flinger.supports_background_blur="
+[ "$GPU_NV" = 1 ] && DROP="$DROP|^ro.hardware.egl=|^debug.renderengine.vulkan=|^ro.hwui.use_vulkan=|^ro.vendor.hwc.use_overlay_planes=|^ro.surface_flinger.supports_background_blur="
 [ -n "$DENSITY" ] && DROP="$DROP|^ro.sf.lcd_density="
 [ -n "$DEVICE_MODEL" ] && DROP="$DROP|^ro.product.model=|^ro.product.vendor.model=|^ro.product.marketname=|^ro.product.vendor.marketname="
 { grep -v -E "$DROP" /new/vendor/build.prop
@@ -562,17 +571,20 @@ DROP='^ro.boot.hypervisor.protected_vm.supported=|^ro.surface_flinger.has_wide_c
   fi
   if [ "$GPU_NV" = 1 ]; then
     # The EGL loader takes the driver's name from ro.hardware.egl and loads it from /vendor/lib64/egl: with
-    # "mesa" it loads libEGL_mesa.so (Mesa's gallium nouveau) instead of ANGLE, so apps, SurfaceFlinger and
-    # HWUI all draw with the NVIDIA GPU.
+    # "mesa" it loads libEGL_mesa.so (Mesa's gallium nouveau) instead of ANGLE, so apps, SurfaceFlinger
+    # and HWUI all draw with the NVIDIA GPU.
     echo "ro.hardware.egl=mesa"
     # SurfaceFlinger composites with its Vulkan engine by default; that engine needs a Vulkan driver and
     # NVIDIA has none, so use the OpenGL engine (EGL/GLES through Mesa) instead.
     echo "debug.renderengine.vulkan=false"
     # Same for the apps: HWUI with Vulkan would need a Vulkan driver.
     echo "ro.hwui.use_vulkan=false"
-    # drm_hwcomposer: nouveau's planes have no COLOR_PIPELINE property (like amdgpu's), and its "generic"
-    # backend would try overlay planes.
-    echo "vendor.hwc.drm.enable_color_pipeline=false"
+    # The color pipeline stays ENABLED here (Google's default): the HWC then sets the plane's color encoding
+    # and range from the layer's dataspace. Without it the nouveau planes keep the DRM default
+    # (ITU-R BT.601 YCbCr, limited range) while the framebuffer is ARGB8888, and the display hardware
+    # misreads the pixels: the picture is black (the hardware cursor still shows, it does not go through a
+    # plane). nouveau's planes do have the COLOR_PIPELINE property, so the HWC accepts them.
+    # drm_hwcomposer on an unknown driver also tries overlay planes, which nouveau does not want.
     echo "ro.vendor.hwc.use_overlay_planes=false"
     # Background blur is expensive; on a slow driver it is not worth it.
     echo "ro.surface_flinger.supports_background_blur=0"
