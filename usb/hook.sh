@@ -238,6 +238,13 @@ gbos_gpu_decide() {
   done
   # 1) the display is on the NVIDIA card (or GPU_NVIDIA=1 forces it): Mesa's EGL, the GPU does the 3D.
   if [ -n "$nv" ] && { [ "$ddrv" = nouveau ] || [ -n "${GPU_NV_FORCE:-}" ]; } && [ "${GPU_NVIDIA:-auto}" != 0 ]; then
+    if [ "${GPU_NVIDIA:-auto}" = sw ]; then
+      # GPU_NVIDIA=sw: no Mesa at all, the picture is drawn by SwiftShader on the CPU (the NVIDIA card
+      # only carries the display). This is the test for "is the black picture the OpenGL path?"
+      GPU_SW=1
+      log "hook: nvidia: nouveau bound (display on ${disp:-none}), but GPU_NVIDIA=sw: drawing with SwiftShader"
+      return 0
+    fi
     if gbos_gpu_mesa_install; then
       GPU_NV=1
       log "hook: nvidia: nouveau bound (display on ${disp:-none}), Mesa's EGL active: 3D acceleration on the NVIDIA GPU"
