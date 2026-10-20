@@ -33,6 +33,19 @@ gbos_bind_patches() {
   done < $G/patched/MANIFEST
   log "hook: PATCH-STATUS $gp_ok applied, $gp_bad not applied"
 }
+# Bind the patched libraries again over the paths in patched/MANIFEST (used after /vendor/lib64 was
+# overlaid: the tmpfs hid the bind mounts, so the original libraries were back and the BoringSSL
+# self-test failed on the unpatched libcrypto).
+gbos_reapply_patches() {
+  [ -f $G/patched/MANIFEST ] || return 0
+  while read -r gp_kind gp_target gp_want gp_file gp_rest; do
+    case $gp_kind in early|bind) ;; *) continue;; esac
+    [ -f "$G/$gp_file" ] || continue
+    [ -f "$gp_target" ] || continue
+    [ "$(sha256sum $gp_target | cut -d' ' -f1)" = "$gp_want" ] || continue
+    mount --bind "$G/$gp_file" "$gp_target" 2>/dev/null && log "hook: nvidia: re-applied $gp_target"
+  done < $G/patched/MANIFEST
+}
 # Google's userspace needs AVX: the first instructions of its dynamic linker (__linker_init: vxorps/vmovups ymm) are VEX-encoded,
 # and the kernel's emulator only covers the *newer* extensions (GFNI, VNNI, SHA-NI, ...), not baseline AVX. A CPU without AVX
 # (many Celeron/Pentium/Atom parts) kills init at once ("traps: init[1] trap invalid opcode ... in linker64", then a silent hang).
@@ -175,6 +188,10 @@ gbos_gpu_mesa_install() {
   cp -f $M/libEGL_mesa.so $M/libGLESv1_CM_mesa.so $M/libGLESv2_mesa.so $O/new/egl/ || { log "hook: nvidia: copying Mesa's EGL FAILED"; return 1; }
   cp -f $M/libgallium_dri.so $M/libgbm.so.1 $O/new/ || { log "hook: nvidia: copying Mesa's driver FAILED"; return 1; }
   mount --bind $O/new $V || { log "hook: nvidia: bind $O/new -> $V FAILED"; return 1; }
+  # The tmpfs hid the patched libraries (early_patch.sh's bind mounts live *under* /vendor/lib64): the
+  # BoringSSL self-test then runs the unpatched libcrypto and fails, and init reboots the device
+  # ("reboot,boringssl-self-check-failed"). Put them back.
+  gbos_reapply_patches
   log "hook: nvidia: Mesa's EGL/GLES installed in /vendor/lib64/egl ($n vendor files kept)"
   return 0
 }
