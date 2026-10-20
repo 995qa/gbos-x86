@@ -580,3 +580,25 @@ SHA-NI, 256-bit VAES/VPCLMULQDQ, AVX-IFMA and AVX-512; the lapis binaries use th
     nouveau_display.c and the `nouveau.atomic` default (0 -> 1, so the DRM core gets DRIVER_ATOMIC). "nouveau.atomic=0" on the
     module load turns it off again. The change is in the *module* (nouveau.ko), so no new kernel image is needed - only the module
     tree (usb/modules/, 429 modules).
+- 2026-10-19 **NVIDIA: the whole stack works on the NVIDIA card (nouveau), the picture is black only in Mesa's OpenGL path, and
+  the cause is in AOSP's GraphicBuffer: with the mapper4 gralloc the window buffer has no native handle, and Mesa's Android EGL
+  needs exactly that handle to import the buffer.**
+  - *What works now* (the Quadro P1000, OptiPlex 7050, monitor in the NVIDIA's DP port): the kernel driver (nouveau, the GR
+    engine with the WHENCE-linked firmware, atomic modesetting from the upstream patch), the HWC's pipeline
+    ("drmhwc: Attaching pipeline 'DP-1' to the display #0 (Primary)"), Mesa's gallium nouveau (SurfaceFlinger: "GLES: Mesa,
+    NV137, OpenGL ES 3.2 Mesa 25.0.7"), the apps (no GL errors at all), the console (the verbose screen) and the whole Android
+    stack.
+  - *The picture is black* in the Mesa path only: with `GPU_NVIDIA=sw` (SwiftShader draws on the CPU, the NVIDIA card only carries
+    the display) the login screen appears, slowly. So the display path, the HWC and SurfaceFlinger are fine; what is missing is Mesa
+    putting pixels into the Android buffers.
+  - *The cause*, from AOSP's frameworks/native/libs/ui/GraphicBuffer.cpp: the mapper4 path (`GraphicBuffer::initWithSize`) fills
+    width/height/stride/format/usage/layerCount into the ANativeWindowBuffer but **never sets its `handle`** - only the legacy
+    `initWithHandle()` does ("ANativeWindowBuffer::handle = inHandle;"). This image's gralloc is cros_gralloc/minigbm with the
+    mapper4 HAL, so the handle is nullptr. Mesa's Android EGL does `struct u_gralloc_buffer_handle gr_handle = { .handle = buf->handle, ... }`
+    and every u_gralloc backend (cros, imapper4, libdrm, fallback) needs that handle, so the buffer import fails and nothing is
+    rendered. Upstream Mesa (main) has the same code, so this is not something a newer Mesa fixes.
+  - *The way out* is a Mesa patch: the NDK's `AHardwareBuffer_getId()` (API 29+) returns the buffer id the mapper4 service knows,
+    so the native handle can be rebuilt from it and handed to u_gralloc (the imapper4 backend then gets the dma-buf). That needs the
+    mapper4 interface headers in the Mesa build as well - a piece of work, and it is the only thing left for real 3D acceleration.
+  - Until then, `GPU_NVIDIA=sw` in gbos.cfg gives a working (slow) desktop on the NVIDIA card, and `GPU_NVIDIA=auto` (the default)
+    is the Mesa path.
