@@ -182,7 +182,8 @@ gbos_gpu_mesa_install() {
   for f in $O/orig/*; do
     [ -e "$f" ] || continue
     b=${f##*/}
-    touch "$O/new/$b" 2>/dev/null
+    # a directory has to be a directory in the tmpfs too, or the bind mount fails
+    if [ -d "$f" ]; then mkdir "$O/new/$b" 2>/dev/null; else touch "$O/new/$b" 2>/dev/null; fi
     mount --bind "$f" "$O/new/$b" 2>/dev/null && n=$((n+1))
   done
   cp -f $M/libEGL_mesa.so $M/libGLESv1_CM_mesa.so $M/libGLESv2_mesa.so $O/new/egl/ || { log "hook: nvidia: copying Mesa's EGL FAILED"; return 1; }
