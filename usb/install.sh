@@ -252,12 +252,13 @@ tool sfdisk -l $TD >> $L/install.log 2>&1
 say "Formatting ..."
 tool mkfs.fat -F 32 -n GBOS_EFI ${P}1 >> $L/install.log 2>&1 || die "mkfs GBOS_EFI failed"
 tool mkfs.fat -F 32 -n GBOSSYS ${P}2 >> $L/install.log 2>&1 || die "mkfs GBOSSYS failed"
-# No 'encrypt' feature: vold then behaves as it does on tmpfs (no fscrypt).
+# No 'encrypt' feature: vold then behaves as it does on tmpfs (no fscrypt). GBOS_DATA gets 'verity' (fs-verity): without it Play Store
+# updates fail with INSTALL_FAILED_BAD_SIGNATURE ("Failed to enable fs-verity", issue 17). An install made before this: tune2fs -O verity on GBOS_DATA.
 # mke2fs discards the whole partition first (fast on real NVMe/eMMC). QEMU's emulated eMMC "erases" by really writing 0xFF over the range,
 # so a test run (gbos_install_confirm= on the command line, QEMU only) skips it; the 25 GB data partition would otherwise need 25 GB of host disk.
 NODISCARD=; [ -n "$CONFIRM" ] && NODISCARD="-E nodiscard"
 tool mke2fs -F -q -t ext4 $NODISCARD -L GBOS_META ${P}3 >> $L/install.log 2>&1 || die "mkfs GBOS_META failed"
-tool mke2fs -F -q -t ext4 $NODISCARD -L GBOS_DATA -m 0 ${P}4 >> $L/install.log 2>&1 || die "mkfs GBOS_DATA failed"
+tool mke2fs -F -q -t ext4 $NODISCARD -L GBOS_DATA -m 0 -O verity ${P}4 >> $L/install.log 2>&1 || die "mkfs GBOS_DATA failed"
 tool e2fsck -fn ${P}3 >> $L/install.log 2>&1 || die "fsck GBOS_META failed"
 tool e2fsck -fn ${P}4 >> $L/install.log 2>&1 || die "fsck GBOS_DATA failed"
 

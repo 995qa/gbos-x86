@@ -100,10 +100,13 @@ if [ -n "$APB" ]; then
   ' "$O/audio_config.xml" > "$O/audio_config.xml.new" && mv "$O/audio_config.xml.new" "$O/audio_config.xml"
 fi
 
-# --- mixer_paths.xml: the second speaker pair and the jack mic -----------------------------------------------------------
+# --- mixer_paths.xml: output volumes, the second speaker pair and the jack mic -----------------------------------------------------------
 # With a codec fixup that declares a second speaker pin (ENVY 13-aq0xxx) the HDA parser names the pair "Speaker" and "Bass Speaker";
-# unmute both. Mic: "Mic" / "Headset Mic" depending on the pin label. Absent controls are skipped by audio_route.
+# unmute both. Some codecs (ALC245, HP Spectre x360 14, issue 10) have no "Master Playback Volume", only per-output ones that start at
+# 0, so those are set too (87 is the usual Realtek maximum; a control that is absent or has a lower maximum is skipped by audio_route). Mic: "Mic" / "Headset Mic" depending on the pin label. Absent controls are skipped by audio_route.
 sedi "$O/mixer_paths.xml" \
+  -e '/name="Master Playback Volume"/{' -e p -e 's/name="Master Playback Volume" value="[^"]*"/name="Speaker Playback Volume" value="87 87"/' -e p \
+  -e 's/name="Speaker Playback Volume"/name="Headphone Playback Volume"/' -e '}' \
   -e '/name="Speaker Playback Switch"/{' -e p -e 's/name="Speaker Playback Switch"/name="Bass Speaker Playback Switch"/' -e '}' \
   -e '/name="Capture Switch"/{' -e p -e 's/name="Capture Switch"/name="Mic Capture Switch"/' -e p \
   -e 's/name="Mic Capture Switch"/name="Headset Mic Capture Switch"/' -e '}'

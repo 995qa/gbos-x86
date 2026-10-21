@@ -242,16 +242,17 @@ shipped), `hook.sh` switches to **software rendering**, logged as `hook: softwar
 - Background blur and overlay planes are turned off (`ro.surface_flinger.supports_background_blur=0`, `ro.vendor.hwc.use_overlay_planes=false`):
   blur is far too slow on the CPU, and the composer's non-Intel backend is untested.
 
-**RADV (real GPU rendering, experimental).** `tools/radv-android/build.sh` cross-builds Mesa 25.0.7's AMD Vulkan driver (RADV, no LLVM) for Android with the
-NDK in docker (about 10 minutes after the downloads) and writes `build/radv/vulkan.radv.so` (13 MB; an Android Vulkan HAL: exports `HMI`, needs only
+**RADV (real GPU rendering, experimental).** `tools/radv-android/build.sh` cross-builds Mesa main (b888682c)'s AMD Vulkan driver (RADV, no LLVM) for Android with the
+NDK r30 in Docker (about 10 minutes after the downloads) and writes `build/radv/vulkan.radv.so` (18 MB; an Android Vulkan HAL: exports `HMI`, needs only
 `libcutils/liblog/libnativewindow/libsync/libz` + bionic). Copy it to `usb/patched/`; with `GPU_VULKAN=auto` (default) `hook.sh` then binds it over
-`vulkan.intel.so` instead of SwiftShader when `amdgpu` is bound (`GPU_VULKAN=swiftshader` goes back). **It has only been built and checked as an ELF
-(`tools/test_gpu_select.sh` tests the choice); it has never run on a Radeon.** Likely trouble: buffers shared between gralloc (linear dumb buffers)
-and RADV, the composer on AMD, and SELinux/permissions on `/dev/dri/renderD128`.
+`vulkan.intel.so` instead of SwiftShader when `amdgpu` is bound (`GPU_VULKAN=swiftshader` goes back). It reaches the desktop on an
+MSI Modern 15 B7M (Ryzen 5 7530U, Barcelo, RADV RENOIR), and video previews in Play Store and Photos play. Known problems on that machine: Photos cannot open
+HEVC clips (the software HEVC decoder fails), the pointer renders as a red square, and the built-in touchpad is absent; see `HANDOFF.md`.
+`tools/test_gpu_select.sh` tests only the driver-selection logic.
 
 `GPU_SOFTWARE` in `gbos.cfg`: `auto` (default; never changes anything while an Intel GPU is present), `1` (force, for testing on Intel), `0` (never).
-Expect a slow, but working, desktop; use a lower `RESOLUTION` if it crawls. **Never booted on a real AMD laptop**; the AMD CPU side
-(Ryzen) is untested too. `tools/test_gpu_select.sh` tests the decision logic and `tools/swiftshader-android/qemu/run.py` smoke-tests the
+Expect a working desktop; use a lower `RESOLUTION` if it crawls. The AMD CPU side (Ryzen) has been tested on one MSI Modern 15 B7M (Ryzen 5 7530U).
+`tools/test_gpu_select.sh` tests the decision logic and `tools/swiftshader-android/qemu/run.py` smoke-tests the
 driver inside Google's userspace under QEMU.
 
 ## Repository map
@@ -320,7 +321,7 @@ recognised by its MMC device type: SD cards, card readers and the stick are neve
 alone). With more than one internal disk the installer refuses until `INSTALL_DISK=nvme0n1` (or `mmcblk0`) is set in `gbos.cfg`.
 A **SATA disk** (M.2 SATA or 2.5") is a target when the machine has no NVMe/eMMC: it is recognised by being owned by the SATA driver (libata), so a USB stick, a USB-SATA
 adapter or a card reader is never a target. A laptop with an NVMe *and* a SATA disk keeps installing to the NVMe; to use the SATA disk set `INSTALL_DISK=sda` in `gbos.cfg`.
-The BIOS must show the disk in **AHCI** mode (not Intel RST/RAID or VMD), otherwise Linux cannot see it. The serial to type is the drive's own serial.
+The BIOS must show the disk in **AHCI** mode (not Intel RST/RAID or VMD), otherwise Linux cannot see it. (On a Dell the setting is *SATA/NVMe Operation*: change `RAID On` to `AHCI/NVMe`. `CONFIG_VMD` is not in this kernel.) The serial to type is the drive's own serial.
 Minimum disk size 24 GB. eMMC controllers on the PCI bus work (`sdhci-pci`); ACPI-only ones (some AMD and older Atom parts) are not supported.
 - **No gbos on the disk:** it shows the disk's model/serial/size and **erases the whole disk** only after
   you type the serial number (eMMC: the MMC serial, or its CID when that is empty or zero; SATA: the drive's serial). Layout: `GBOS_EFI` 512M (ESP), `GBOSSYS` 8G FAT32 (the `gbos/` files),

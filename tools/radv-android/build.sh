@@ -8,8 +8,8 @@
 # Needs no device libraries: Mesa's `android-stub` option links against stub liblog/libcutils/libhardware/libnativewindow/libsync (their
 # real versions on the device are used at run time); only the AOSP headers are needed, which tools/swiftshader-android/build.sh
 # already fetched into the docker volume gbos-swsr (run that once first, or let this script fetch them: same pinned commits).
-# Downloads (once, into the docker volume gbos-swsr): Android NDK r27c (~650 MB, dl.google.com), Mesa 25.0.7 (~370 MB, gitlab.freedesktop.org),
-# libdrm 2.4.124 (~10 MB), meson wraps for expat/zlib (a few MB, wrapdb.mesonbuild.com).
+# Downloads (once, into the docker volume gbos-swsr): Android NDK r30 (~739 MB, dl.google.com), Mesa main b888682c (~400 MB, gitlab.freedesktop.org),
+# libdrm 2.4.133 (~10 MB), meson wraps for expat/zlib (a few MB, wrapdb.mesonbuild.com).
 # No LLVM: RADV compiles shaders with its own ACO compiler.
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -23,10 +23,10 @@ DOCKERFILE
 docker volume create gbos-swsr >/dev/null
 docker run --rm --platform linux/amd64 -e KEEP_BUILD="${KEEP_BUILD:-0}" -v gbos-swsr:/w -v "$HERE":/h:ro -v "$OUT":/out gbos-radvbuild sh -ec '
   cd /w
-  NDK=/w/android-ndk-r27c
+  NDK=/w/android-ndk-r30
   if [ ! -d $NDK ]; then
-    curl -fL --retry 5 -o ndk.zip https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
-    echo "59c2f6dc96743b5daf5d1626684640b20a6bd2b1d85b13156b90333741bad5cc  ndk.zip" | sha256sum -c -
+    curl -fL --retry 5 -o ndk.zip https://dl.google.com/android/repository/android-ndk-r30-linux.zip
+    echo "5107f898313790e449e87eee2183d9a20602dee9  ndk.zip" | sha1sum -c -
     unzip -q ndk.zip
   fi
   # AOSP headers (same pinned commits as tools/swiftshader-android/build.sh)
@@ -43,9 +43,28 @@ docker run --rm --platform linux/amd64 -e KEEP_BUILD="${KEEP_BUILD:-0}" -v gbos-
   A=/w/aosp
   INC="$A/libhardware/include:$A/libhardware/include_all:$A/core/libcutils/include:$A/core/libsync/include:$A/core/libsystem/include:$A/core/libutils/include:$A/core/liblog/include:$A/core/libvndksupport/include:$A/native/libs/nativewindow/include:$A/native/libs/arect/include:$A/native/vulkan/include"
   export CPLUS_INCLUDE_PATH=$INC C_INCLUDE_PATH=$INC
-  # Mesa and libdrm, pinned
-  [ -d mesa/.git ] || git clone -q --depth 1 --branch mesa-25.0.7 https://gitlab.freedesktop.org/mesa/mesa.git mesa
-  [ -d drm/.git ]  || git clone -q --depth 1 --branch libdrm-2.4.124 https://gitlab.freedesktop.org/mesa/drm.git drm
+  # Mesa and libdrm, pinned; refresh old checkouts in this persistent volume.
+  # 26.2.5 lacks radv/android deferred swapchain binding (f7a95102, main only): it crashes in radv_BindImageMemory2
+  MESA_TAG=b888682cba909c477f405e377cee881ca68e289d
+  DRM_TAG=libdrm-2.4.133
+  if [ -d mesa/.git ]; then
+    git -C mesa fetch -q --depth 1 origin $MESA_TAG
+    git -C mesa checkout -q -f $MESA_TAG
+    git -C mesa clean -fdx
+  else
+    rm -rf mesa
+    git init -q mesa
+    git -C mesa fetch -q --depth 1 https://gitlab.freedesktop.org/mesa/mesa.git $MESA_TAG
+    git -C mesa checkout -q -f FETCH_HEAD
+  fi
+  if [ -d drm/.git ]; then
+    git -C drm fetch -q --depth 1 origin tag $DRM_TAG
+    git -C drm checkout -q -f $DRM_TAG
+    git -C drm clean -fdx
+  else
+    rm -rf drm
+    git clone -q --depth 1 --branch $DRM_TAG https://gitlab.freedesktop.org/mesa/drm.git drm
+  fi
   TC=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
   SDK=34
   cat > cross.txt <<EOF
@@ -75,13 +94,19 @@ EOF
   ninja -C drm-b install >/w/drm-build.log 2>&1 || { tail -30 /w/drm-build.log; exit 1; }
   export PKG_CONFIG_PATH=/w/sys/lib/pkgconfig PKG_CONFIG_LIBDIR=/w/sys/lib/pkgconfig
   cd mesa
+  python3 /h/patch_mesa.py
+  BUILD_KEY=$MESA_TAG-$DRM_TAG
+  if [ ! -f /w/mesa-build-key ] || [ "$(cat /w/mesa-build-key)" != "$BUILD_KEY" ]; then
+    rm -rf /w/mesa-b
+  fi
   [ "${KEEP_BUILD:-0}" = 1 ] || rm -rf /w/mesa-b
   [ -d /w/mesa-b ] || meson setup /w/mesa-b . --cross-file /w/cross.txt --prefix=/w/mesa-out --buildtype=release -Db_ndebug=true -Dstrip=true \
     -Dc_args="-I/w/sys/include -I/w/sys/include/libdrm" -Dcpp_args="-I/w/sys/include -I/w/sys/include/libdrm" -Dplatforms=android -Dandroid-stub=true -Dplatform-sdk-version=$SDK -Dandroid-libbacktrace=disabled -Dcpp_rtti=false \
     -Dvulkan-drivers=amd -Dgallium-drivers= -Dllvm=disabled -Dopengl=false -Dgles1=disabled -Dgles2=disabled -Degl=disabled -Dgbm=disabled -Dglx=disabled \
     -Dglvnd=disabled -Dvalgrind=disabled -Dlibunwind=disabled -Dlmsensors=disabled -Dshader-cache=enabled -Dbuild-tests=false -Dvulkan-layers= \
-    -Dvideo-codecs= -Dgallium-va=disabled -Dgallium-vdpau=disabled -Dxlib-lease=disabled -Dzstd=disabled -Dperfetto=false -Dmicrosoft-clc=disabled \
-    -Dintel-rt=disabled -Dteflon=false -Dgallium-opencl=disabled -Dgallium-rusticl=false -Dtools= >/w/mesa-setup.log 2>&1 || { tail -60 /w/mesa-setup.log; exit 1; }
+    -Dvideo-codecs= -Dgallium-va=disabled -Dxlib-lease=disabled -Dzstd=disabled -Dperfetto=false -Dmicrosoft-clc=disabled \
+    -Dintel-rt=disabled -Dteflon=false -Dgallium-rusticl=false -Dtools= >/w/mesa-setup.log 2>&1 || { tail -60 /w/mesa-setup.log; exit 1; }
+  echo "$BUILD_KEY" > /w/mesa-build-key
   ninja -C /w/mesa-b -j"$(nproc)" >/w/mesa-build.log 2>&1 || { tail -60 /w/mesa-build.log; exit 1; }
   find /w/mesa-b -name "libvulkan_radeon.so" -exec ls -l {} \;
   F=$(find /w/mesa-b -name "libvulkan_radeon.so" | head -n 1)

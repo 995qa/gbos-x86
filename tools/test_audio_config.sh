@@ -164,6 +164,8 @@ sys.exit(1 if bad else 0)
 EOF
 if [ $? = 0 ]; then ok "sof: all device numbers / jack names / required fields ($(grep -c . $W/sof.py.out) line)"; else bad "sof mapping: $(cat $W/sof.py.out)"; fi
 chk "sof: mixer unmutes Bass Speaker"   "$O/mixer_paths.xml" 'name="Bass Speaker Playback Switch"'
+chk "sof: mixer sets Speaker Playback Volume (no Master volume on ALC245)" "$O/mixer_paths.xml" 'name="Speaker Playback Volume" value="87 87"'
+chk "sof: mixer sets Headphone Playback Volume" "$O/mixer_paths.xml" 'name="Headphone Playback Volume" value="87 87"'
 chk "sof: mixer keeps Speaker switch"   "$O/mixer_paths.xml" 'name="Speaker Playback Switch"'
 chk "sof: mixer jack mic switch"        "$O/mixer_paths.xml" 'name="Mic Capture Switch"'
 
@@ -239,6 +241,42 @@ print('PYOK' if not bad else 'PYBAD'); sys.exit(1 if bad else 0)
 EOF
 if [ $? = 0 ]; then ok "sdw: Speaker pcm 2, Headphone pcm 0, jack mic pcm 1, no Deepbuffer PCM, jack names"; else bad "sdw mapping: $(cat $W/sdw.py.out)"; fi
 
+# ---- 5c. Meteor Lake SOF-HDA (Lenovo ThinkBook Plus G5 Hybrid 21N9, Core Ultra 7 155H; TAS2781 I2C amps behind the Realtek codec; HDMI
+#          codec at address 2). NOT a real /proc/asound capture: the card does not exist yet (probe fails on the missing topology).
+#          Card id/name are what skl_hda_dsp_generic registers (same as the ENVY); the PCM list is the one in
+#          intel/sof-ace-tplg/sof-hda-generic-2ch.tplg (= sof-ipc4-tplg/..., parsed from the file: HDA Analog 0, Deepbuffer 31,
+#          "DMIC Raw" 6, HDMI1/2/3 = 3/4/5; no DMIC16kHz PCM in the IPC4 topology). The HDA names of the PCMs are the machine driver's ---
+D=$(mk sofmtl)
+cat > $D/cards <<'EOF'
+ 0 [sofhdadsp      ]: sof-hda-dsp - sof-hda-dsp
+                      LENOVO-21N9-ThinkBookPlusG5Station-LNVNB161216
+EOF
+cat > $D/pcm <<'EOF'
+00-00: HDA Analog (*) :  : playback 1 : capture 1
+00-03: HDMI1 (*) :  : playback 1
+00-04: HDMI2 (*) :  : playback 1
+00-05: HDMI3 (*) :  : playback 1
+00-06: DMIC Raw (*) :  : capture 1
+00-31: Deepbuffer HDA Analog (*) :  : playback 1
+EOF
+cat > $D/input <<'EOF'
+N: Name="sof-hda-dsp Mic"
+N: Name="sof-hda-dsp Headphone"
+N: Name="sof-hda-dsp HDMI/DP,pcm=3"
+N: Name="sof-hda-dsp HDMI/DP,pcm=4"
+N: Name="sof-hda-dsp HDMI/DP,pcm=5"
+EOF
+gen sofmtl gbos-gen sofhdadsp sof-hda-dsp >/dev/null
+C=$W/out-sofmtl/gbos-gen/audio_config.xml
+wellformed "$C"
+chk "mtl: speaker on the analog PCM 0 (the TAS2781 amps hang off the codec's speaker pin)" "$C" "<PlaybackPCM>hw:sofhdadsp,0</PlaybackPCM>"
+chk "mtl: internal mic = 'DMIC Raw' pcm 6" "$C" "<CapturePCM>hw:sofhdadsp,6</CapturePCM>"
+chk "mtl: headset mic = analog capture pcm 0" "$C" "<CapturePCM>hw:sofhdadsp,0</CapturePCM>"
+chk "mtl: HDMI1 pcm 3" "$C" "<PlaybackPCM>hw:sofhdadsp,3</PlaybackPCM>"
+chk "mtl: HDMI3 jack" "$C" "<JackDev>sof-hda-dsp HDMI/DP,pcm=5</JackDev>"
+nochk "mtl: no deep-buffer PCM used" "$C" ",31<"
+nochk "mtl: no leftover PCH" "$C" "PCH"
+
 # ---- 6. hook.sh: card id PCH still takes the static files, and generation is guarded -------------------------------------
 H=$ROOT/usb/hook.sh
 chk "hook: PCH uses the shipped config"   "$H" 'ASRC=$G/audio/gbos-hda-pch; ADEF=$G/audio/audio_default.xml'
@@ -272,6 +310,8 @@ mkcards $W/a2 "NVidia|HDA NVidia|Nvidia_GPU_8c_HDMI/DP" "PCH|HDA Intel PCH|Realt
 selcheck "NVIDIA dGPU is card 0" PCH $W/a2
 mkcards $W/a3 "sofhdadsp|sof-hda-dsp|Realtek_ALC285,Intel_Kabylake_HDMI"
 selcheck "SOF HDA with the codec's own HDMI" sofhdadsp $W/a3
+mkcards $W/a3b "sofhdadsp|sof-hda-dsp|Realtek_ALC287,Intel_MeteorLake_HDMI"
+selcheck "Meteor Lake SOF HDA (Realtek codec + Intel HDMI codec, codec mask 5)" sofhdadsp $W/a3b
 mkcards $W/a4 "PCH|HDA Intel PCH|Realtek_ALC3254,Intel_Skylake_HDMI"
 selcheck "plain Intel laptop" PCH $W/a4
 mkcards $W/a5 "sofsoundwire|sof-soundwire|-" "HDMI|HDA Intel HDMI|Intel_HDMI"
