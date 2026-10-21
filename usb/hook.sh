@@ -200,12 +200,46 @@ fi
 
 # Logcat to the stick: expose the USB volume inside Android at /postinstall, and overlay
 # /system/etc/init with a copy plus gbos.rc (a logcat service writing to this boot's log dir).
+# "vid:pid" (lower-case hex, as in Android's IDC file names) of every touchpad that is not on USB, from /proc/bus/input/devices.
+# INPUTS= is only for tests.
+gbos_touchpads() {
+  awk -v RS= -F'\n' '{
+    bus = ""; v = ""; p = ""; name = ""
+    for (i = 1; i <= NF; i++) {
+      if ($i ~ /^I: /) { n = split($i, a, " "); for (j = 1; j <= n; j++) {
+        if (a[j] ~ /^Bus=/) bus = substr(a[j], 5); if (a[j] ~ /^Vendor=/) v = substr(a[j], 8); if (a[j] ~ /^Product=/) p = substr(a[j], 9) } }
+      if ($i ~ /^N: Name=/) name = tolower($i)
+    }
+    if (name ~ /touchpad|trackpad/ && bus != "0003" && v != "" && p != "") print tolower(v) ":" tolower(p)
+  }' ${INPUTS:-/proc/bus/input/devices} 2>/dev/null | sort -u
+}
 if mount --bind /gbos /new/postinstall; then
   mkdir -p /tmp/sysinit && cp -a /new/system/etc/init/. /tmp/sysinit/
   rm -f /tmp/sysinit/gscd.rc   # gscd needs Google's security chip (/dev/tpm0); it only crash-loops here
   # RESOLUTION in gbos.cfg: logical display size (e.g. 2400x1350) that SurfaceFlinger renders at and the
   # display hardware scales to the 1920x1080 panel, so everything looks smaller with stock density.
   case "$RESOLUTION" in [0-9]*x[0-9]*) WMSIZE=$RESOLUTION;; *) WMSIZE=reset;; esac
+  # Touchpad flicks: Android's touchpad gesture engine holds motion back for Change_Timeout (200 ms) after touchdown, so a quick flick
+  # (40-160 ms) never moves the cursor (Dell Inspiron 14 Plus 7440, Goodix 27C6:0D53, issue 17). Android reads a per-device IDC file
+  # from /data/system/devices/idc/Vendor_<vid>_Product_<pid>.idc: one is written for every non-USB touchpad found now, at post-fs-data.
+  # TOUCHPAD_FLICK=0 in gbos.cfg turns it off.
+  # The Trusty security VM never answers here (software KeyMint/Gatekeeper replace it) but spins one CPU core at 100%: stopped once
+  # booted. TRUSTY_VM=1 in gbos.cfg keeps it running (for debugging).
+  if [ "${TRUSTY_VM:-0}" = 1 ]; then TRUSTYSTOP="# gbos: Trusty VM kept (TRUSTY_VM=1)"; else TRUSTYSTOP="stop trusty_security_protected_vm_launcher"; fi
+  IDCRC=
+  if [ "${TOUCHPAD_FLICK:-1}" != 0 ]; then
+    for tp in $(gbos_touchpads); do
+      IDCN=Vendor_${tp%:*}_Product_${tp#*:}.idc
+      printf 'device.internal = 1\ntouch.deviceType = touchPad\ngestureProp.Drumroll_Suppression_Enable = 0\ngestureProp.Change_Timeout = 0.02\n' > $L/$IDCN \
+        && IDCRC="$IDCRC
+    copy /postinstall/gbos/logs/boot-$N/$IDCN /data/system/devices/idc/$IDCN
+    chown system system /data/system/devices/idc/$IDCN
+    chmod 0644 /data/system/devices/idc/$IDCN" && log "hook: touchpad $tp: IDC with Change_Timeout=0.02 queued"
+    done
+    [ -n "$IDCRC" ] && IDCRC="    mkdir /data/system 0775 system system
+    mkdir /data/system/devices 0775 system system
+    mkdir /data/system/devices/idc 0775 system system$IDCRC"
+  fi
   cat > /tmp/sysinit/gbos.rc <<RC
 # Rotate at 1 MB: on this stick, data written past ~4 MB of a file that stays open never reaches
 # the FAT cluster chain before power-off (fsck: "size ... should at most be 4046848"). Rotating
@@ -228,14 +262,33 @@ service gbos_sync /system/bin/sh -c "while true; do sleep 5; sync; done"
     seclabel u:r:shell:s0
 
 # Sound diagnostics, 60 s after boot: ALSA cards/PCMs/codec (incl. control names) and audioserver state.
-service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; ( head -n 3000 cards pcm devices card0/id card0/codec*; ls -l /dev/snd; grep '^N: Name' /proc/bus/input/devices; dumpsys media.audio_flinger; dumpsys media.audio_policy ) > /postinstall/gbos/logs/boot-$N/audio.txt 2>&1; sh /postinstall/gbos/audio/mixdiag.sh $N"
+service gbos_audiodiag /system/bin/sh -c "sleep 60; cd /proc/asound; ( head -n 3000 cards pcm devices card*/id card*/codec*; ls -l /dev/snd; grep '^N: Name' /proc/bus/input/devices; dumpsys media.audio_flinger; dumpsys media.audio_policy ) > /postinstall/gbos/logs/boot-$N/audio.txt 2>&1; sh /postinstall/gbos/audio/mixdiag.sh $N"
     user root
     group root audio
     seclabel u:r:shell:s0
     oneshot
+# A /dev/dri/card0 node with no DRM device behind it (i915 is card1) makes the Widevine HAL abort at start-up ("Failed to open
+# /dev/dri/card0: Permission denied"; Dell Inspiron 14 Plus 7440, issue 17). Point it at card1 and restart the HAL. Does nothing when
+# the kernel has a real card0.
+service gbos_drifix /system/bin/sh -c "[ ! -e /sys/class/drm/card0 ] && [ -e /dev/dri/card1 ] && rm -f /dev/dri/card0 && ln -s /dev/dri/card1 /dev/dri/card0 && setprop sys.gbos_dri_fixed 1"
+    user root
+    group root
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
+on early-boot
+    start gbos_drifix
+on property:sys.gbos_dri_fixed=1
+    restart vendor.drm-widevine-hal
+
+on post-fs-data
+$IDCRC
 on property:sys.boot_completed=1
     # KMS debug was on during the HWC's first modesets (set early in hook.sh); turn it off again.
     write /sys/module/drm/parameters/debug 0
+    # The KVM exit trace (kvmtrace.txt) only matters while the Trusty VM boots; left on it costs CPU and writes a lot.
+    write /sys/kernel/tracing/tracing_on 0
+    $TRUSTYSTOP
     start gbos_audiodiag
     start gbos_devname
     start gbos_iptsd

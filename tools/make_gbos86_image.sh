@@ -129,7 +129,7 @@ if [ "$BUILD_TYPE" = "looper" ]; then
   mke2fs -F -q -t ext4 -E nodiscard -L GBOS_META p3.ext4
 
   truncate -s ${DATA_MB}M p4.ext4
-  mke2fs -F -q -t ext4 -E nodiscard -m 0 -L GBOS_DATA p4.ext4
+  mke2fs -F -q -t ext4 -E nodiscard -m 0 -O verity -L GBOS_DATA p4.ext4
 
   # Total size with GPT header and secondary backup table at end
   TOTAL_MB=$(( 1 + EFI_MB + SYS_MB + META_MB + DATA_MB + 1 ))

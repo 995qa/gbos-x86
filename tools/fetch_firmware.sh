@@ -38,6 +38,12 @@ g() { grep "$@" $W/all.txt || true; }
   g -E '^brcm/(BCM|brcmfmac4(3602|350|356|358|3455|371))'
   # Cirrus amps found on some laptops
   g -E '^cirrus/cs35l(41|56)-[^/]*$'
+  # Texas Instruments TAS2781/TAS2563 smart amps (Lenovo ThinkBook/Yoga/Legion, Meteor Lake+; I2C amps behind an HDA codec). The HDA driver
+  # (snd-hda-scodec-tas2781-i2c) asks for "TAS2XXX<codec subsystem id>.bin" / "TAS2XXX<id><n>.bin" (and older "TIAS2781RCA<n>.bin") with NO
+  # directory and no MODULE_FIRMWARE entry, so fw_wanted.py cannot see them; linux-firmware keeps them under ti/tas2781/ (and some at the
+  # root). Take both places; the ones under ti/ are also copied to the root below, where the loader looks.
+  g -E '^(TAS2XXX|TIAS2781RCA|INT8866RCA)[^/]*\.bin$'
+  g -E '^ti/(tas2781|tas25xx|tas2563)/'
   # Drivers that build the firmware name at run time (not in MODULE_FIRMWARE): ship their whole family
   g -E '^ath12k/WCN7850/'
   g -E '^ath10k/(QCA6174|QCA9377|QCA9984|QCA9887|QCA988X)/'
@@ -56,6 +62,14 @@ echo "modules ask for $(wc -l < $W/unresolved.txt | tr -d ' ') names linux-firmw
 tr '\n' '\0' < $W/want.txt | xargs -0 git checkout HEAD --
 mkdir -p $OUT
 tar -cf - -T $W/want.txt | tar -xf - -C $OUT
+# TAS2781/TAS2563 HDA amp firmware is requested from the firmware root ("TAS2XXX38A5.bin", no ti/tas2781/ prefix in the module's format
+# strings): copy whatever linux-firmware keeps under ti/ to the root as well (existing root files win).
+for d in $OUT/ti/tas2781 $OUT/ti/tas25xx $OUT/ti/tas2563; do
+  [ -d $d ] || continue
+  for f in $d/TAS2XXX*.bin $d/TIAS2781RCA*.bin $d/INT8866RCA*.bin; do
+    [ -f "$f" ] && { [ -f "$OUT/${f##*/}" ] || cp "$f" "$OUT/${f##*/}"; }
+  done
+done
 # WHENCE "Link: a -> b" entries (b relative to a's folder) exist only after linux-firmware's own install script runs; they are not in
 # the git tree. Drivers still ask for the link names: Intel AX201 Bluetooth wants intel/ibt-0040-1050.sfi, a link to ibt-0040-0041.sfi
 # (reporter's hwdetect: "Failed to load Intel firmware file intel/ibt-0040-1050.sfi (-2)"). FAT has no symlinks: copy the target,
@@ -82,6 +96,11 @@ for d in sof sof-ipc4 sof-ipc4-lib sof-ipc4-tplg sof-tplg; do
   rm -rf $OUT/intel/$d; cp -RL $W/sof-bin-$SOFV/$d $OUT/intel/$d   # -L: FAT has no symlinks
   find $OUT/intel/$d -name '*.ldc' -delete                            # debug dictionaries, not needed
 done
+# The kernel looks for the HDA-generic topologies of Meteor Lake and newer (ACE) in intel/sof-ace-tplg ("Topology file: intel/sof-ace-tplg/
+# sof-hda-generic-2ch.tplg ... not found", Dell Inspiron 14 Plus 7440, issue 17). linux-firmware has that folder as a symlink to
+# sof-ipc4-tplg, which FAT cannot hold: ship copies of the generic ones.
+rm -rf $OUT/intel/sof-ace-tplg; mkdir -p $OUT/intel/sof-ace-tplg
+cp $OUT/intel/sof-ipc4-tplg/sof-hda-generic*.tplg $OUT/intel/sof-ace-tplg/
 cp $W/sof-bin-$SOFV/LICENCE.Intel $OUT/intel/LICENCE.sof-bin
 echo "sof-bin: v$SOFV" >> $OUT/FIRMWARE_SOURCE.txt
 du -sh $OUT

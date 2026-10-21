@@ -300,7 +300,7 @@ recognised by its MMC device type: SD cards, card readers and the stick are neve
 alone). With more than one internal disk the installer refuses until `INSTALL_DISK=nvme0n1` (or `mmcblk0`) is set in `gbos.cfg`.
 A **SATA disk** (M.2 SATA or 2.5") is a target when the machine has no NVMe/eMMC: it is recognised by being owned by the SATA driver (libata), so a USB stick, a USB-SATA
 adapter or a card reader is never a target. A laptop with an NVMe *and* a SATA disk keeps installing to the NVMe; to use the SATA disk set `INSTALL_DISK=sda` in `gbos.cfg`.
-The BIOS must show the disk in **AHCI** mode (not Intel RST/RAID or VMD), otherwise Linux cannot see it. The serial to type is the drive's own serial.
+The BIOS must show the disk in **AHCI** mode (not Intel RST/RAID or VMD), otherwise Linux cannot see it. (On a Dell the setting is *SATA/NVMe Operation*: change `RAID On` to `AHCI/NVMe`. `CONFIG_VMD` is not in this kernel.) The serial to type is the drive's own serial.
 Minimum disk size 24 GB. eMMC controllers on the PCI bus work (`sdhci-pci`); ACPI-only ones (some AMD and older Atom parts) are not supported.
 - **No gbos on the disk:** it shows the disk's model/serial/size and **erases the whole disk** only after
   you type the serial number (eMMC: the MMC serial, or its CID when that is empty or zero; SATA: the drive's serial). Layout: `GBOS_EFI` 512M (ESP), `GBOSSYS` 8G FAT32 (the `gbos/` files),
